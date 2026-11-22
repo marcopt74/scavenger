@@ -1,10 +1,19 @@
-import { Check, ChevronDown, FolderGit2, Lock, Plus, Settings2 } from 'lucide-react';
+import { Check, ChevronDown, FolderGit2, Lock, Map as MapIcon, Plus, Settings2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { ONBOARDING_STAGES } from '../../shared/types';
-import type { SessionPublicState, UserLevel } from '../../shared/types';
+import type {
+  CorePillarId,
+  LearningTopic,
+  SessionPublicState,
+  TopicMastery,
+  UserLevel,
+} from '../../shared/types';
 
 interface StageProgressBarProps {
   session: SessionPublicState;
+  disabled: boolean;
+  onSelectPillar: (pillarId: CorePillarId, title: string) => void;
+  onSelectTopic: (topic: LearningTopic) => void;
   onChangeLevel: (level: UserLevel) => void;
   onOpenSettings: () => void;
   onResetSession: () => void;
@@ -28,24 +37,45 @@ const LEVEL_OPTIONS: Array<{ value: UserLevel; label: string; desc: string }> = 
   },
 ];
 
+const MASTERY_LABELS: Record<TopicMastery, string> = {
+  unexplored: 'New',
+  introduced: 'Introduced',
+  developing: 'Developing',
+  solid: 'Solid',
+};
+
 export function StageProgressBar({
   session,
+  disabled,
+  onSelectPillar,
+  onSelectTopic,
   onChangeLevel,
   onOpenSettings,
   onResetSession,
 }: StageProgressBarProps) {
   const [levelOpen, setLevelOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [mapOpen, setMapOpen] = useState(false);
+  const levelRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleOutsideClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (levelRef.current && !levelRef.current.contains(target)) {
         setLevelOpen(false);
+      }
+      if (mapRef.current && !mapRef.current.contains(target)) {
+        setMapOpen(false);
       }
     }
     document.addEventListener('mousedown', handleOutsideClick);
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
+
+  const learning = session.learning;
+  const pillarTopics = learning.topics.filter((t) => t.kind === 'pillar');
+  const customTopics = learning.topics.filter((t) => t.kind === 'custom');
+  const exploredCount = learning.topics.filter((t) => t.mastery !== 'unexplored').length;
 
   const currentLevelLabel =
     session.diagnostic.inferredLevel === 'uncalibrated'
@@ -67,31 +97,121 @@ export function StageProgressBar({
         </div>
       </div>
 
-      <nav className="stage-rail" aria-label="Onboarding stages">
+      <nav className="stage-rail" aria-label="Repository learning pillars">
         {ONBOARDING_STAGES.map((stage) => {
-          const isActive = session.currentStage === stage.id;
-          const isCompleted = session.completedStages.includes(stage.id);
+          const topic = pillarTopics.find((t) => t.pillarId === stage.pillarId);
+          const mastery: TopicMastery = topic?.mastery ?? 'unexplored';
+          const isActive = learning.activeTopicId === `pillar:${stage.pillarId}`;
+
           return (
-            <div
-              key={stage.id}
-              className={`stage-step ${isActive ? 'active' : isCompleted ? 'completed' : ''}`}
-              title={`Stage ${stage.id}: ${stage.title} — ${stage.description}`}
+            <button
+              key={stage.pillarId}
+              type="button"
+              disabled={disabled}
+              className={`stage-step pillar-btn mastery-${mastery} ${isActive ? 'active' : ''}`}
+              title={`${stage.title} (${MASTERY_LABELS[mastery]}) — click to explore or revisit`}
+              onClick={() => onSelectPillar(stage.pillarId, stage.title)}
             >
-              <span className="stage-step-num">
-                {isCompleted && !isActive ? <Check size={10} strokeWidth={3} /> : stage.id}
+              <span className={`mastery-indicator mastery-${mastery}`}>
+                {mastery === 'solid' ? <Check size={10} strokeWidth={3} /> : null}
               </span>
               <span>{stage.shortLabel}</span>
-            </div>
+            </button>
           );
         })}
       </nav>
 
       <div className="topbar-right">
-        <div className="level-menu-wrap" ref={menuRef}>
+        <div className="level-menu-wrap" ref={mapRef}>
           <button
             type="button"
             className="chip-button"
-            onClick={() => setLevelOpen((v) => !v)}
+            onClick={() => {
+              setMapOpen((v) => !v);
+              setLevelOpen(false);
+            }}
+            title="View your Knowledge Map & custom topics"
+          >
+            <MapIcon size={13} />
+            <span>Map · {exploredCount}</span>
+            <ChevronDown size={13} />
+          </button>
+
+          {mapOpen && (
+            <div className="knowledge-popover">
+              <div className="knowledge-popover-header">
+                <div className="level-popover-title" style={{ padding: 0 }}>
+                  Knowledge Map
+                </div>
+                <span className="knowledge-active-label">
+                  Active: <strong>{learning.activeTopicTitle}</strong>
+                </span>
+                {learning.lastAssessmentSummary && (
+                  <p className="knowledge-summary-note">{learning.lastAssessmentSummary}</p>
+                )}
+              </div>
+
+              <div className="knowledge-section">
+                <div className="knowledge-section-label">Core Repository Pillars</div>
+                {pillarTopics.map((topic) => (
+                  <button
+                    key={topic.id}
+                    type="button"
+                    disabled={disabled}
+                    className={`topic-row ${topic.id === learning.activeTopicId ? 'active' : ''}`}
+                    onClick={() => {
+                      onSelectTopic(topic);
+                      setMapOpen(false);
+                    }}
+                  >
+                    <span className="topic-row-title">{topic.title}</span>
+                    <span className={`mastery-pill mastery-${topic.mastery}`}>
+                      {MASTERY_LABELS[topic.mastery]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="knowledge-section">
+                <div className="knowledge-section-label">
+                  Custom Topics ({customTopics.length})
+                </div>
+                {customTopics.length === 0 ? (
+                  <p className="knowledge-empty">
+                    Ask to learn any module, file, or concept and it will appear here.
+                  </p>
+                ) : (
+                  customTopics.map((topic) => (
+                    <button
+                      key={topic.id}
+                      type="button"
+                      disabled={disabled}
+                      className={`topic-row ${topic.id === learning.activeTopicId ? 'active' : ''}`}
+                      onClick={() => {
+                        onSelectTopic(topic);
+                        setMapOpen(false);
+                      }}
+                    >
+                      <span className="topic-row-title">{topic.title}</span>
+                      <span className={`mastery-pill mastery-${topic.mastery}`}>
+                        {MASTERY_LABELS[topic.mastery]}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="level-menu-wrap" ref={levelRef}>
+          <button
+            type="button"
+            className="chip-button"
+            onClick={() => {
+              setLevelOpen((v) => !v);
+              setMapOpen(false);
+            }}
             title="Recalibrate explanation depth"
           >
             <span>{currentLevelLabel}</span>

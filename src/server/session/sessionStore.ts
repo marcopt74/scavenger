@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import type {
   ChatMessage,
   DiagnosticProfile,
+  LearningState,
   OnboardingStage,
   ProviderSelection,
   RootReconSummary,
@@ -10,6 +11,7 @@ import type {
   UserLevel,
 } from '../../shared/types.js';
 import { getDefaultProviderSelection } from '../config.js';
+import { cloneLearningState, createInitialLearningState } from './learningEngine.js';
 
 export interface InternalSession {
   id: string;
@@ -18,6 +20,7 @@ export interface InternalSession {
   currentStage: OnboardingStage;
   completedStages: Set<OnboardingStage>;
   diagnostic: DiagnosticProfile;
+  learning: LearningState;
   rootRecon: RootReconSummary;
   provider: ProviderSelection;
   observedFiles: Set<string>;
@@ -36,6 +39,7 @@ export function createSession(
   const id = `sess_${crypto.randomUUID().slice(0, 10)}`;
   const now = new Date().toISOString();
   const provider = providerOverride ?? getDefaultProviderSelection();
+  const learning = createInitialLearningState(rootRecon);
 
   const observedFiles = new Set<string>();
   if (rootRecon.readmePath) observedFiles.add(rootRecon.readmePath);
@@ -94,7 +98,9 @@ export function createSession(
     content: buildStage0OpeningMessage(rootRecon),
     createdAt: now,
     stage: 0,
+    topicTitle: learning.activeTopicTitle,
     toolActivities: openingActivities,
+    suggestedNextSteps: learning.suggestedNextSteps.map((s) => ({ ...s })),
   };
 
   const session: InternalSession = {
@@ -107,6 +113,7 @@ export function createSession(
       inferredLevel: 'uncalibrated',
       completed: false,
     },
+    learning,
     rootRecon,
     provider,
     observedFiles,
@@ -139,11 +146,6 @@ export function updateSessionCalibration(
     }
   }
   if (patch.currentStage !== undefined) {
-    if (patch.currentStage > session.currentStage) {
-      for (let s = 0; s < patch.currentStage; s++) {
-        session.completedStages.add(s as OnboardingStage);
-      }
-    }
     session.currentStage = patch.currentStage;
   }
   if (patch.provider) {
@@ -161,6 +163,7 @@ export function toPublicState(session: InternalSession): SessionPublicState {
     currentStage: session.currentStage,
     completedStages: [...session.completedStages].sort((a, b) => a - b),
     diagnostic: { ...session.diagnostic },
+    learning: cloneLearningState(session.learning),
     rootRecon: session.rootRecon,
     provider: { ...session.provider },
     observedFilesCount: session.observedFiles.size,
@@ -201,10 +204,10 @@ function buildStage0OpeningMessage(recon: RootReconSummary): string {
     `- **Root signals:** ${recon.readmePath ? `\`${recon.readmePath}\`, ` : ''}${manifestList}${topDirs ? ` · top directories: ${topDirs}` : ''}`,
     `- **History:** ${gitLine}`,
     '',
-    `Before we walk through the repository's purpose, architecture, and core flows, a quick calibration (feel free to answer in one short reply):`,
+    `You can guide this learning session in any direction. To tailor depth right away, feel free to share a quick calibration — **or skip straight ahead by clicking a topic below or telling me anything you want to learn first**:`,
     '',
-    `1. **Stack familiarity:** How comfortable are you with ${recon.detectedStack.length > 0 ? recon.detectedStack.slice(0, 3).join(' / ') : 'this tech stack'} (new to it, comfortable, or deeply experienced)?`,
-    `2. **Your goal:** What brings you into \`${recon.repoName}\` today (high-level orientation, fixing a bug, adding a feature, or reviewing architecture)?`,
-    `3. **Preferred depth:** Would you like conceptual mental models first, balanced engineering detail, or senior-level internals & trade-offs?`,
+    `1. **Stack familiarity:** How comfortable are you with ${recon.detectedStack.length > 0 ? recon.detectedStack.slice(0, 3).join(' / ') : 'this tech stack'}?`,
+    `2. **Your goal:** What brings you into \`${recon.repoName}\` today (orientation, architecture review, fixing a bug, adding a feature)?`,
+    `3. **Preferred style:** Conceptual mental models first, balanced engineering detail, or internals & trade-offs?`,
   ].join('\n');
 }

@@ -1095,4 +1095,385 @@ select {
   .welcome-guarantees {
     grid-template-columns: 1fr;
   }
+  .suggested-steps-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Non-linear Mastery Rail & Knowledge Map */
+.pillar-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.pillar-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.pillar-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mastery-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.mastery-indicator.mastery-unexplored {
+  border: 1.5px solid #cbd5e1;
+  background: transparent;
+}
+
+.mastery-indicator.mastery-introduced {
+  background: var(--accent-soft);
+  border: 1.5px solid var(--accent);
+}
+
+.mastery-indicator.mastery-developing {
+  background: var(--warning-soft);
+  border: 1.5px solid #d97706;
+}
+
+.mastery-indicator.mastery-solid {
+  background: var(--success-soft);
+  color: var(--success);
+  border: 1.5px solid var(--success);
+}
+
+.knowledge-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 310px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 12px;
+  background: var(--bg-page);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-modal);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.knowledge-popover-header {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.knowledge-active-label {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.knowledge-summary-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+}
+
+.knowledge-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.knowledge-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  padding: 0 6px 2px;
+}
+
+.knowledge-empty {
+  margin: 2px 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.topic-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.topic-row:hover:not(:disabled) {
+  background: var(--bg-surface);
+}
+
+.topic-row.active {
+  background: var(--accent-soft);
+}
+
+.topic-row-title {
+  font-size: 12.8px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mastery-pill {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+}
+
+.mastery-pill.mastery-unexplored {
+  background: var(--bg-surface);
+  color: var(--text-muted);
+}
+
+.mastery-pill.mastery-introduced {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.mastery-pill.mastery-developing {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.mastery-pill.mastery-solid {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+/* Inline Post-Lesson Quick Check & Suggested Next Steps */
+.lesson-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.checkin-card {
+  padding: 13px 16px;
+  border-radius: var(--radius-md);
+  background: #f8fafd;
+  border: 1px solid #dbe7fb;
+}
+
+.checkin-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 8px;
+}
+
+.checkin-icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.checkin-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.checkin-subtitle {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.checkin-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.checkin-list.compact {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.checkin-item {
+  display: list-item;
+}
+
+.checkin-focus-tag {
+  display: inline-block;
+  margin-left: 7px;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-page);
+  border: 1px solid var(--border-subtle);
+  font-size: 11px;
+  color: var(--text-secondary);
+  vertical-align: middle;
+}
+
+.next-steps-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.next-steps-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.next-steps-hint {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.suggested-steps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.next-step-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-page);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease;
+}
+
+.next-step-card:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: #f8fbff;
+  transform: translateY(-1px);
+}
+
+.next-step-card:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.next-step-top {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.step-kind-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+}
+
+.step-kind-badge.kind-deepen {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.step-kind-badge.kind-broaden {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.step-kind-badge.kind-revisit {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.step-kind-badge.kind-explore {
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+}
+
+.next-step-arrow {
+  color: var(--text-muted);
+}
+
+.next-step-card:hover .next-step-arrow {
+  color: var(--accent);
+}
+
+.next-step-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.35;
+}
+
+.next-step-rationale {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.lesson-footer-archived {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.lesson-footer-archived summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.lesson-footer-archived-body {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.archived-step-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }

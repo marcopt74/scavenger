@@ -1,10 +1,11 @@
 import { ArrowUp } from 'lucide-react';
 import { useRef, useState } from 'react';
-import { ONBOARDING_STAGES } from '../../shared/types';
-import type { OnboardingStage, ProviderSelection } from '../../shared/types';
+import type { DiagnosticProfile, ProviderSelection } from '../../shared/types';
 
 interface ComposerProps {
-  currentStage: OnboardingStage;
+  diagnostic: DiagnosticProfile;
+  activeTopicTitle: string;
+  hasPendingCheckIn: boolean;
   provider: ProviderSelection;
   observedFilesCount: number;
   observedCommitsCount: number;
@@ -13,7 +14,9 @@ interface ComposerProps {
 }
 
 export function Composer({
-  currentStage,
+  diagnostic,
+  activeTopicTitle,
+  hasPendingCheckIn,
   provider,
   observedFilesCount,
   observedCommitsCount,
@@ -46,35 +49,38 @@ export function Composer({
     e.target.style.height = `${Math.min(e.target.scrollHeight, 180)}px`;
   }
 
-  const nextStage = currentStage < 4 ? ONBOARDING_STAGES[currentStage + 1] : null;
-  const nudges: Array<{ label: string; prompt: string }> =
-    currentStage === 0
-      ? [
-          {
-            label: 'New to stack · High-level orientation',
-            prompt: 'I am fairly new to this stack. My goal is high-level orientation, and I prefer conceptual mental models first.',
-          },
-          {
-            label: 'Intermediate · Adding a feature',
-            prompt: 'I have intermediate experience with this stack. I want to understand the architecture so I can add a new feature.',
-          },
-          {
-            label: 'Senior · Architecture & internals',
-            prompt: 'I am a senior engineer comfortable with this stack. Give me concise architecture, invariants, and trade-offs.',
-          },
-        ]
-      : [
-          ...(nextStage
-            ? [
-                {
-                  label: `Next: Stage ${nextStage.id} (${nextStage.shortLabel})`,
-                  prompt: `Let's continue to Stage ${nextStage.id}: ${nextStage.title}.`,
-                },
-              ]
-            : []),
-          { label: 'Explain simpler', prompt: 'Can you explain that a bit simpler with less jargon?' },
-          { label: 'Go deeper', prompt: 'Can we go deeper on the implementation details and trade-offs?' },
-        ];
+  const nudges: Array<{ label: string; prompt: string }> = !diagnostic.completed
+    ? [
+        {
+          label: 'New to stack · Mental models first',
+          prompt:
+            'I am new to this stack. My goal is high-level orientation, and I prefer conceptual mental models first.',
+        },
+        {
+          label: 'Intermediate · Architecture & flows',
+          prompt:
+            'I have intermediate experience with this stack. I want to understand the architecture and key flows.',
+        },
+        {
+          label: 'Senior · Internals & trade-offs',
+          prompt:
+            'I am a senior engineer comfortable with this stack. Focus on architecture, invariants, and trade-offs.',
+        },
+      ]
+    : [
+        { label: 'Explain simpler', prompt: 'Can you explain that simpler with a clearer mental model?' },
+        { label: 'Go deeper', prompt: 'Go deeper on the internals, code structure, and trade-offs.' },
+        {
+          label: 'Test my understanding',
+          prompt: `Ask me 2 quick scenario questions to test my understanding of ${activeTopicTitle}.`,
+        },
+      ];
+
+  const placeholder = !diagnostic.completed
+    ? 'Answer the quick calibration — or tell me any topic you want to learn right away…'
+    : hasPendingCheckIn
+      ? 'Answer the quick check above, click a next step, or ask to learn any topic…'
+      : 'Ask to learn any topic, module, or file — or pick a suggested step above…';
 
   return (
     <div className="composer-dock">
@@ -102,11 +108,7 @@ export function Composer({
             onChange={handleChange}
             onKeyDown={handleKeyDown}
             disabled={disabled}
-            placeholder={
-              currentStage === 0
-                ? 'Share your experience, goal, and preferred depth…'
-                : 'Ask about this repository, request a diagram, or move to the next stage…'
-            }
+            placeholder={placeholder}
           />
           <button
             type="button"

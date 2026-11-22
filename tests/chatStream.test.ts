@@ -3,7 +3,7 @@ import type { SSEEvent } from '../src/shared/types.js';
 import { createApp } from '../src/server/index.js';
 
 describe('SSE chat streaming endpoint', () => {
-  it('flushes all SSE events including the final done message before closing the stream', async () => {
+  it('flushes all SSE events including learning state, check-in questions, next steps, and final done message', async () => {
     const app = createApp();
 
     const createRes = await app.request('/api/sessions', {
@@ -21,7 +21,7 @@ describe('SSE chat streaming endpoint', () => {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        message: '1. low 2. learn the architecture 3. from conceptual to detail',
+        message: 'Teach me about pathGuard',
         provider: { provider: 'demo', model: 'local-grounded-demo' },
       }),
     });
@@ -42,14 +42,28 @@ describe('SSE chat streaming endpoint', () => {
       .map((payload) => JSON.parse(payload) as SSEEvent);
 
     const textDeltas = events.filter((e) => e.type === 'text-delta');
+    const stateEvents = events.filter((e) => e.type === 'session-state');
     const doneEvent = events.find((e) => e.type === 'done');
 
     expect(textDeltas.length).toBeGreaterThan(0);
+    expect(stateEvents.length).toBeGreaterThan(0);
+
+    const latestState = stateEvents[stateEvents.length - 1];
+    if (latestState && latestState.type === 'session-state') {
+      expect(latestState.learning.activeTopicId).toBe('custom:pathguard');
+      expect(latestState.learning.pendingCheckIn.length).toBeGreaterThanOrEqual(1);
+      expect(latestState.learning.pendingCheckIn.length).toBeLessThanOrEqual(3);
+      expect(latestState.learning.suggestedNextSteps.length).toBeGreaterThanOrEqual(2);
+      expect(latestState.learning.suggestedNextSteps.length).toBeLessThanOrEqual(3);
+    }
+
     expect(doneEvent).toBeDefined();
     if (doneEvent && doneEvent.type === 'done') {
       expect(doneEvent.message.role).toBe('assistant');
-      expect(doneEvent.message.content.length).toBeGreaterThan(20);
-      expect(doneEvent.message.stage).toBe(1);
+      expect(doneEvent.message.topicTitle).toBe('PathGuard');
+      expect(doneEvent.message.content).toContain('pathGuard.ts');
+      expect(doneEvent.message.checkInQuestions?.length).toBeGreaterThanOrEqual(1);
+      expect(doneEvent.message.suggestedNextSteps?.length).toBeGreaterThanOrEqual(2);
     }
   });
 });

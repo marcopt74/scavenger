@@ -1,10 +1,27 @@
 import crypto from 'node:crypto';
 import { tool } from 'ai';
 import { z } from 'zod';
-import type { OnboardingStage, SSEEvent, ToolActivity, UserLevel, VisualArtifact } from '../../shared/types.js';
+import { PILLAR_TO_STAGE } from '../../shared/types.js';
+import type {
+  CheckInQuestion,
+  CorePillarId,
+  OnboardingStage,
+  SSEEvent,
+  SuggestedNextStep,
+  ToolActivity,
+  TopicMastery,
+  UserLevel,
+  VisualArtifact,
+} from '../../shared/types.js';
 import { GuardrailViolationError } from '../guardrails/pathGuard.js';
+import {
+  cloneLearningState,
+  setCheckInQuestions,
+  setSuggestedNextSteps,
+  upsertTopicMastery,
+} from '../session/learningEngine.js';
 import type { InternalSession } from '../session/sessionStore.js';
-import { mergeDiagnosticProfile, validateStageTransition } from '../session/stageMachine.js';
+import { mergeDiagnosticProfile } from '../session/stageMachine.js';
 import { grepSearch, listTree, readFileSlice } from './fsTools.js';
 import { gitInspect } from './gitTools.js';
 import { generateConceptVisual, renderD2ToSvg } from './visualTools.js';
@@ -13,8 +30,14 @@ export interface ToolContextCallbacks {
   emit: (event: SSEEvent) => void;
   recordVisual: (visual: VisualArtifact) => void;
   recordActivity: (activity: ToolActivity) => void;
-  userRequestedJump: boolean;
+  recordLessonFooter: (footer: {
+    checkInQuestions?: CheckInQuestion[];
+    suggestedNextSteps?: SuggestedNextStep[];
+  }) => void;
 }
+
+const masteryEnum = z.enum(['unexplored', 'introduced', 'developing', 'solid']);
+const pillarEnum = z.enum(['recon', 'purpose', 'architecture', 'flows', 'evolution']);
 
 export function createAgentTools(session: InternalSession, ctx: ToolContextCallbacks) {
   function emitSessionState(): void {
@@ -23,6 +46,7 @@ export function createAgentTools(session: InternalSession, ctx: ToolContextCallb
       currentStage: session.currentStage,
       completedStages: [...session.completedStages].sort((a, b) => a - b),
       diagnostic: { ...session.diagnostic },
+      learning: cloneLearningState(session.learning),
       observedFilesCount: session.observedFiles.size,
       observedCommitsCount: session.observedCommits.size,
     });
@@ -153,62 +177,143 @@ export function createAgentTools(session: InternalSession, ctx: ToolContextCallb
         ),
     }),
 
-    update_onboarding_state: tool({
+    update_learning_state: tool({
       description:
-        'Update the onboarding session stage (0..4) and/or adaptive user level calibration based on diagnostic answers or user requests. Always call this when advancing stages or calibrating explanation level.',
+        'Update the adaptive knowledge map, topic mastery, explanation depth, optional post-lesson check-in questions (0-3), and suggested next learning steps (2-3). Call this on every substantive teaching turn to keep the UI Knowledge Map, Quick Check card, and Next Steps cards synchronized.',
       inputSchema: z.object({
-        targetStage: z.number().int().min(0).max(4).optional().describe('Target onboarding stage (0-4).'),
+        activeTopic: z
+          .object({
+            id: z.string().optional().describe('Existing topic id (e.g. "pillar:architecture" or "custom:auth-flow").'),
+            title: z.string().describe('Human-readable topic title being taught or explored right now.'),
+            kind: z.enum(['pillar', 'custom']).optional().describe('"pillar" for core repo pillars, "custom" for user-requested topics.'),
+            pillarId: pillarEnum.optional().describe('If this lesson maps to a core pillar: recon, purpose, architecture, flows, or evolution.'),
+            mastery: masteryEnum.describe('Current inferred user mastery for this topic.'),
+            notes: z.string().optional().describe('Short note summarizing user understanding or gaps.'),
+            relatedFiles: z.array(z.string()).optional().describe('Grounded repo-relative file paths inspected for this topic.'),
+          })
+          .optional(),
+        previousTopicAssessment: z
+          .object({
+            id: z.string().optional().describe('Topic id of the previously studied topic being assessed.'),
+            title: z.string().describe('Title of the previously studied topic.'),
+            pillarId: pillarEnum.optional(),
+            mastery: z.enum(['introduced', 'developing', 'solid']).describe('Updated mastery based on the user reply.'),
+            notes: z.string().optional().describe('Brief evidence from user answer.'),
+          })
+          .optional()
+          .describe('Update mastery of the prior topic after evaluating the user response to check-in questions.'),
         inferredLevel: z
           .enum(['foundational', 'intermediate', 'advanced'])
           .optional()
-          .describe('Calibrated technical depth level for the user.'),
-        stackFamiliarity: z.string().optional().describe('Short summary of user stack familiarity.'),
-        goal: z.string().optional().describe('Short summary of user goal for exploring this repo.'),
-        preferredDepth: z.string().optional().describe('Short summary of user preferred explanation depth.'),
+          .describe('Calibrated technical depth level for explanations.'),
+        assessmentSummary: z
+          .string()
+          .optional()
+          .describe('1-sentence summary of how the user understanding evolved this turn.'),
+        diagnostic: z
+          .object({
+            stackFamiliarity: z.string().optional(),
+            goal: z.string().optional(),
+            preferredDepth: z.string().optional(),
+          })
+          .optional(),
+        checkInQuestions: z
+          .array(
+            z.object({
+              question: z.string().describe('Concise, thought-provoking comprehension question.'),
+              focus: z.string().optional().describe('Concept or boundary being checked (2-4 words).'),
+            })
+          )
+          .max(3)
+          .optional()
+          .describe('Up to 3 optional check-in questions to infer knowledge evolution after this lesson. Rendered cleanly inline by the UI—do not duplicate in prose.'),
+        suggestedNextSteps: z
+          .array(
+            z.object({
+              title: z.string().describe('Short clickable step title (3-7 words).'),
+              rationale: z.string().describe('1 concise sentence explaining why this logically follows.'),
+              prompt: z.string().describe('Message sent when the user clicks this card.'),
+              kind: z.enum(['deepen', 'broaden', 'revisit', 'explore']).optional(),
+              targetTopicId: z.string().optional(),
+            })
+          )
+          .min(2)
+          .max(3)
+          .optional()
+          .describe('2-3 concrete, repo-grounded next logical learning steps rendered as clickable cards below the lesson.'),
       }),
-      execute: async ({ targetStage, inferredLevel, stackFamiliarity, goal, preferredDepth }) =>
+      execute: async (input) =>
         runTracked(
-          'update_onboarding_state',
-          `Updated onboarding state${targetStage !== undefined ? ` -> Stage ${targetStage}` : ''}${inferredLevel ? ` (${inferredLevel})` : ''}`,
-          undefined,
+          'update_learning_state',
+          `Updated knowledge map${input.activeTopic ? ` · ${input.activeTopic.title}` : ''}${input.inferredLevel ? ` (${input.inferredLevel})` : ''}`,
+          input.activeTopic?.title,
           async () => {
-            const notes: string[] = [];
-
-            if (inferredLevel || stackFamiliarity || goal || preferredDepth) {
+            if (input.inferredLevel || input.diagnostic) {
               session.diagnostic = mergeDiagnosticProfile(session.diagnostic, {
-                inferredLevel: inferredLevel as UserLevel | undefined,
-                stackFamiliarity,
-                goal,
-                preferredDepth,
+                inferredLevel: input.inferredLevel as UserLevel | undefined,
+                stackFamiliarity: input.diagnostic?.stackFamiliarity,
+                goal: input.diagnostic?.goal,
+                preferredDepth: input.diagnostic?.preferredDepth,
                 completed: true,
               });
-              notes.push(`Calibration updated (${session.diagnostic.inferredLevel}).`);
             }
 
-            if (targetStage !== undefined) {
-              const target = targetStage as OnboardingStage;
-              const check = validateStageTransition(session.currentStage, target, {
-                userRequestedJump: ctx.userRequestedJump,
+            if (input.previousTopicAssessment) {
+              const prev = upsertTopicMastery(session.learning, {
+                id: input.previousTopicAssessment.id,
+                title: input.previousTopicAssessment.title,
+                pillarId: input.previousTopicAssessment.pillarId as CorePillarId | undefined,
+                mastery: input.previousTopicAssessment.mastery as TopicMastery,
+                notes: input.previousTopicAssessment.notes,
+                setActive: false,
               });
-              if (check.allowed) {
-                for (let s = 0; s < check.nextStage; s++) {
-                  session.completedStages.add(s as OnboardingStage);
-                }
-                session.currentStage = check.nextStage;
-                notes.push(`Moved to Stage ${session.currentStage}.`);
-              } else {
-                session.completedStages.add(session.currentStage);
-                session.currentStage = check.nextStage;
-                notes.push(check.reason || `Advanced progressively to Stage ${check.nextStage}.`);
+              syncPillarCompletion(session, prev.pillarId, prev.mastery);
+            }
+
+            if (input.activeTopic) {
+              const active = upsertTopicMastery(session.learning, {
+                id: input.activeTopic.id,
+                title: input.activeTopic.title,
+                kind: input.activeTopic.kind,
+                pillarId: input.activeTopic.pillarId as CorePillarId | undefined,
+                mastery: input.activeTopic.mastery as TopicMastery,
+                notes: input.activeTopic.notes,
+                relatedFiles: input.activeTopic.relatedFiles,
+                setActive: true,
+              });
+              if (active.pillarId) {
+                session.currentStage = PILLAR_TO_STAGE[active.pillarId];
+                syncPillarCompletion(session, active.pillarId, active.mastery);
               }
             }
 
+            if (input.assessmentSummary?.trim()) {
+              session.learning.lastAssessmentSummary = input.assessmentSummary.trim();
+            }
+
+            let savedQuestions: CheckInQuestion[] | undefined;
+            if (input.checkInQuestions !== undefined) {
+              savedQuestions = setCheckInQuestions(session.learning, input.checkInQuestions);
+            }
+
+            let savedSteps: SuggestedNextStep[] | undefined;
+            if (input.suggestedNextSteps !== undefined) {
+              savedSteps = setSuggestedNextSteps(session.learning, input.suggestedNextSteps);
+            }
+
+            ctx.recordLessonFooter({
+              checkInQuestions: savedQuestions,
+              suggestedNextSteps: savedSteps,
+            });
+
             session.updatedAt = new Date().toISOString();
             return {
-              currentStage: session.currentStage,
-              completedStages: [...session.completedStages].sort((a, b) => a - b),
-              diagnostic: session.diagnostic,
-              note: notes.join(' '),
+              activeTopicId: session.learning.activeTopicId,
+              activeTopicTitle: session.learning.activeTopicTitle,
+              inferredLevel: session.diagnostic.inferredLevel,
+              checkInCount: savedQuestions?.length ?? session.learning.pendingCheckIn.length,
+              suggestedStepsCount: savedSteps?.length ?? session.learning.suggestedNextSteps.length,
+              note: 'Knowledge map, Quick Check questions, and Suggested Next Steps updated in the UI. Do not repeat the Quick Check list or Next Step cards verbatim in prose.',
             };
           }
         ),
@@ -301,4 +406,16 @@ export function createAgentTools(session: InternalSession, ctx: ToolContextCallb
         }),
     }),
   };
+}
+
+function syncPillarCompletion(
+  session: InternalSession,
+  pillarId: CorePillarId | undefined,
+  mastery: TopicMastery
+): void {
+  if (!pillarId) return;
+  const stage: OnboardingStage = PILLAR_TO_STAGE[pillarId];
+  if (mastery === 'developing' || mastery === 'solid') {
+    session.completedStages.add(stage);
+  }
 }

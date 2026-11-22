@@ -3,23 +3,28 @@ import { ONBOARDING_STAGES } from '../../shared/types';
 import type { ChatMessage, ToolActivity, VisualArtifact } from '../../shared/types';
 import { ConceptVisualCard } from './ConceptVisualCard';
 import { DiagramCard } from './DiagramCard';
+import { LessonFooter } from './LessonFooter';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { ToolActivityPill } from './ToolActivityPill';
 
 interface ChatMessageListProps {
   messages: ChatMessage[];
+  activeTopicTitle: string;
   streamingText: string;
   streamingActivities: ToolActivity[];
   streamingVisuals: VisualArtifact[];
   isStreaming: boolean;
+  onSelectPrompt: (prompt: string) => void;
 }
 
 export function ChatMessageList({
   messages,
+  activeTopicTitle,
   streamingText,
   streamingActivities,
   streamingVisuals,
   isStreaming,
+  onSelectPrompt,
 }: ChatMessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -30,39 +35,51 @@ export function ChatMessageList({
   return (
     <main className="chat-scroll">
       <div className="chat-stream">
-        {messages.map((msg) => (
-          <div key={msg.id} className={`msg-row ${msg.role}`}>
-            {msg.role === 'user' ? (
-              <div className="user-bubble">{msg.content}</div>
-            ) : (
-              <article className="assistant-turn">
-                <div className="assistant-header">
-                  <span className="assistant-avatar">S</span>
-                  <span>
-                    Stage {msg.stage} · {ONBOARDING_STAGES[msg.stage]?.title}
-                  </span>
-                </div>
+        {messages.map((msg, idx) => {
+          const isLatestAssistant =
+            msg.role === 'assistant' && idx === messages.length - 1 && !isStreaming;
+          const label = msg.topicTitle || ONBOARDING_STAGES[msg.stage]?.title || 'Lesson';
 
-                {msg.toolActivities && msg.toolActivities.length > 0 && (
-                  <ToolActivityPill activities={msg.toolActivities} />
-                )}
+          return (
+            <div key={msg.id} className={`msg-row ${msg.role}`}>
+              {msg.role === 'user' ? (
+                <div className="user-bubble">{msg.content}</div>
+              ) : (
+                <article className="assistant-turn">
+                  <div className="assistant-header">
+                    <span className="assistant-avatar">S</span>
+                    <span>{label}</span>
+                  </div>
 
-                {msg.visuals && msg.visuals.length > 0 && (
-                  <VisualStack visuals={msg.visuals} />
-                )}
+                  {msg.toolActivities && msg.toolActivities.length > 0 && (
+                    <ToolActivityPill activities={msg.toolActivities} />
+                  )}
 
-                <MarkdownRenderer content={msg.content} />
-              </article>
-            )}
-          </div>
-        ))}
+                  {msg.visuals && msg.visuals.length > 0 && (
+                    <VisualStack visuals={msg.visuals} />
+                  )}
+
+                  <MarkdownRenderer content={msg.content} />
+
+                  <LessonFooter
+                    checkInQuestions={msg.checkInQuestions}
+                    suggestedNextSteps={msg.suggestedNextSteps}
+                    isLatest={isLatestAssistant}
+                    disabled={isStreaming}
+                    onSelectStep={onSelectPrompt}
+                  />
+                </article>
+              )}
+            </div>
+          );
+        })}
 
         {isStreaming && (
           <div className="msg-row assistant">
             <article className="assistant-turn">
               <div className="assistant-header">
                 <span className="assistant-avatar">S</span>
-                <span>Analyzing repository…</span>
+                <span>{activeTopicTitle || 'Analyzing repository…'}</span>
               </div>
 
               {streamingActivities.length > 0 && (

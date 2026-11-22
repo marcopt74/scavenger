@@ -1,9 +1,18 @@
 import crypto from 'node:crypto';
 import { stepCountIs, streamText } from 'ai';
-import type { ChatMessage, ProviderSelection, SSEEvent, ToolActivity, VisualArtifact } from '../../shared/types.js';
+import type {
+  ChatMessage,
+  CheckInQuestion,
+  ProviderSelection,
+  SSEEvent,
+  SuggestedNextStep,
+  ToolActivity,
+  VisualArtifact,
+} from '../../shared/types.js';
 import { resolveLanguageModel } from '../config.js';
+import { cloneLearningState } from '../session/learningEngine.js';
 import type { InternalSession } from '../session/sessionStore.js';
-import { detectJumpAheadRequest, detectRecalibrationSignal } from '../session/stageMachine.js';
+import { detectRecalibrationSignal } from '../session/stageMachine.js';
 import { createAgentTools } from '../tools/agentTools.js';
 import { checkD2Available } from '../tools/visualTools.js';
 import { runDemoTurn } from './demoAgent.js';
@@ -21,6 +30,7 @@ export async function runOnboardingTurn(
     content: userText,
     createdAt: new Date().toISOString(),
     stage: session.currentStage,
+    topicTitle: session.learning.activeTopicTitle,
   };
   session.messages.push(userMessage);
 
@@ -34,6 +44,7 @@ export async function runOnboardingTurn(
       currentStage: session.currentStage,
       completedStages: [...session.completedStages].sort((a, b) => a - b),
       diagnostic: { ...session.diagnostic },
+      learning: cloneLearningState(session.learning),
       observedFilesCount: session.observedFiles.size,
       observedCommitsCount: session.observedCommits.size,
     });
@@ -42,12 +53,25 @@ export async function runOnboardingTurn(
   const activeProvider = providerOverride ?? session.provider;
   const visuals: VisualArtifact[] = [];
   const toolActivities: ToolActivity[] = [];
+  let turnCheckInQuestions: CheckInQuestion[] | undefined;
+  let turnSuggestedNextSteps: SuggestedNextStep[] | undefined;
 
   const recordVisual = (v: VisualArtifact) => visuals.push(v);
   const recordActivity = (a: ToolActivity) => {
     const idx = toolActivities.findIndex((existing) => existing.id === a.id);
     if (idx >= 0) toolActivities[idx] = a;
     else toolActivities.push(a);
+  };
+  const recordLessonFooter = (footer: {
+    checkInQuestions?: CheckInQuestion[];
+    suggestedNextSteps?: SuggestedNextStep[];
+  }) => {
+    if (footer.checkInQuestions !== undefined) {
+      turnCheckInQuestions = footer.checkInQuestions;
+    }
+    if (footer.suggestedNextSteps !== undefined) {
+      turnSuggestedNextSteps = footer.suggestedNextSteps;
+    }
   };
 
   let fullText = '';
@@ -56,21 +80,20 @@ export async function runOnboardingTurn(
     const model = resolveLanguageModel(activeProvider);
 
     if (!model) {
-      // Grounded local demo mode
       fullText = await runDemoTurn(session, userText, {
         emit,
         recordVisual,
         recordActivity,
+        recordLessonFooter,
         recalibrated,
       });
     } else {
       const d2Available = await checkD2Available();
-      const jump = detectJumpAheadRequest(userText);
       const tools = createAgentTools(session, {
         emit,
         recordVisual,
         recordActivity,
-        userRequestedJump: jump.requested,
+        recordLessonFooter,
       });
 
       const system = buildSystemPrompt(session, { d2Available });
@@ -84,7 +107,7 @@ export async function runOnboardingTurn(
         system,
         messages: conversation,
         tools,
-        stopWhen: stepCountIs(10),
+        stopWhen: stepCountIs(12),
         temperature: 0.3,
       });
 
@@ -107,8 +130,15 @@ export async function runOnboardingTurn(
     content: fullText.trim() || '(No response text generated.)',
     createdAt: new Date().toISOString(),
     stage: session.currentStage,
+    topicTitle: session.learning.activeTopicTitle,
     visuals: visuals.length > 0 ? visuals : undefined,
     toolActivities: toolActivities.length > 0 ? toolActivities : undefined,
+    checkInQuestions:
+      turnCheckInQuestions && turnCheckInQuestions.length > 0 ? turnCheckInQuestions : undefined,
+    suggestedNextSteps:
+      turnSuggestedNextSteps && turnSuggestedNextSteps.length > 0
+        ? turnSuggestedNextSteps
+        : undefined,
   };
 
   session.messages.push(assistantMessage);
@@ -119,6 +149,7 @@ export async function runOnboardingTurn(
     currentStage: session.currentStage,
     completedStages: [...session.completedStages].sort((a, b) => a - b),
     diagnostic: { ...session.diagnostic },
+    learning: cloneLearningState(session.learning),
     observedFilesCount: session.observedFiles.size,
     observedCommitsCount: session.observedCommits.size,
   });

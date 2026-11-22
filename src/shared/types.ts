@@ -1,7 +1,12 @@
 export type OnboardingStage = 0 | 1 | 2 | 3 | 4;
 
+export type CorePillarId = 'recon' | 'purpose' | 'architecture' | 'flows' | 'evolution';
+
+export type TopicMastery = 'unexplored' | 'introduced' | 'developing' | 'solid';
+
 export interface StageMetadata {
   id: OnboardingStage;
+  pillarId: CorePillarId;
   shortLabel: string;
   title: string;
   description: string;
@@ -10,35 +15,56 @@ export interface StageMetadata {
 export const ONBOARDING_STAGES: readonly StageMetadata[] = [
   {
     id: 0,
+    pillarId: 'recon',
     shortLabel: 'Recon',
-    title: 'Diagnostic & Root Recon',
+    title: 'Root Recon & Calibration',
     description: 'Inspect repository root and calibrate depth to your background and goal.',
   },
   {
     id: 1,
+    pillarId: 'purpose',
     shortLabel: 'Purpose',
     title: 'Repo Purpose & Domain',
     description: 'Clarify what the repository does, who it serves, and its domain boundaries.',
   },
   {
     id: 2,
+    pillarId: 'architecture',
     shortLabel: 'Architecture',
     title: 'System Architecture',
     description: 'Map major modules, boundaries, dependencies, and architectural patterns.',
   },
   {
     id: 3,
+    pillarId: 'flows',
     shortLabel: 'Flows',
     title: 'Core Flows & Implementation',
     description: 'Trace real execution paths, entry points, and key symbols at your depth.',
   },
   {
     id: 4,
+    pillarId: 'evolution',
     shortLabel: 'Evolution',
-    title: 'Git Evolution & Next Steps',
+    title: 'Git Evolution & Conventions',
     description: 'Surface git history decisions, local conventions, and concrete files to explore next.',
   },
 ] as const;
+
+export const PILLAR_TO_STAGE: Record<CorePillarId, OnboardingStage> = {
+  recon: 0,
+  purpose: 1,
+  architecture: 2,
+  flows: 3,
+  evolution: 4,
+};
+
+export const STAGE_TO_PILLAR: Record<OnboardingStage, CorePillarId> = {
+  0: 'recon',
+  1: 'purpose',
+  2: 'architecture',
+  3: 'flows',
+  4: 'evolution',
+};
 
 export type UserLevel = 'uncalibrated' | 'foundational' | 'intermediate' | 'advanced';
 
@@ -56,6 +82,41 @@ export interface DiagnosticProfile {
   preferredDepth?: string;
   inferredLevel: UserLevel;
   completed: boolean;
+}
+
+export interface LearningTopic {
+  id: string;
+  title: string;
+  kind: 'pillar' | 'custom';
+  pillarId?: CorePillarId;
+  mastery: TopicMastery;
+  notes?: string;
+  relatedFiles?: string[];
+  lastStudiedAt?: string;
+}
+
+export interface CheckInQuestion {
+  id: string;
+  question: string;
+  focus: string;
+}
+
+export interface SuggestedNextStep {
+  id: string;
+  title: string;
+  rationale: string;
+  prompt: string;
+  kind: 'deepen' | 'broaden' | 'revisit' | 'explore';
+  targetTopicId?: string;
+}
+
+export interface LearningState {
+  activeTopicId: string;
+  activeTopicTitle: string;
+  topics: LearningTopic[];
+  pendingCheckIn: CheckInQuestion[];
+  suggestedNextSteps: SuggestedNextStep[];
+  lastAssessmentSummary?: string;
 }
 
 export interface ManifestSnapshot {
@@ -133,8 +194,11 @@ export interface ChatMessage {
   content: string;
   createdAt: string;
   stage: OnboardingStage;
+  topicTitle?: string;
   visuals?: VisualArtifact[];
   toolActivities?: ToolActivity[];
+  checkInQuestions?: CheckInQuestion[];
+  suggestedNextSteps?: SuggestedNextStep[];
 }
 
 export interface SessionPublicState {
@@ -144,6 +208,7 @@ export interface SessionPublicState {
   currentStage: OnboardingStage;
   completedStages: OnboardingStage[];
   diagnostic: DiagnosticProfile;
+  learning: LearningState;
   rootRecon: RootReconSummary;
   provider: ProviderSelection;
   observedFilesCount: number;
@@ -162,6 +227,7 @@ export type SSEEvent =
       currentStage: OnboardingStage;
       completedStages: OnboardingStage[];
       diagnostic: DiagnosticProfile;
+      learning: LearningState;
       observedFilesCount: number;
       observedCommitsCount: number;
     }

@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import type {
   ChatMessage,
+  CorePillarId,
   HealthInfo,
+  LearningTopic,
   ProviderSelection,
   SessionPublicState,
   ToolActivity,
@@ -71,6 +73,7 @@ export function App() {
       content: text,
       createdAt: new Date().toISOString(),
       stage: session.currentStage,
+      topicTitle: session.learning.activeTopicTitle,
     };
 
     setSession((prev) =>
@@ -84,6 +87,7 @@ export function App() {
     let receivedDone = false;
     let accText = '';
     let accStage = session.currentStage;
+    let accTopicTitle = session.learning.activeTopicTitle;
     const accActivities: ToolActivity[] = [];
     const accVisuals: VisualArtifact[] = [];
 
@@ -105,6 +109,7 @@ export function App() {
             setStreamingVisuals([...accVisuals]);
           } else if (event.type === 'session-state') {
             accStage = event.currentStage;
+            accTopicTitle = event.learning.activeTopicTitle;
             setSession((prev) =>
               prev
                 ? {
@@ -112,6 +117,7 @@ export function App() {
                     currentStage: event.currentStage,
                     completedStages: event.completedStages,
                     diagnostic: event.diagnostic,
+                    learning: event.learning,
                     observedFilesCount: event.observedFilesCount,
                     observedCommitsCount: event.observedCommitsCount,
                   }
@@ -137,6 +143,7 @@ export function App() {
           content: accText.trim() || '(Visual response)',
           createdAt: new Date().toISOString(),
           stage: accStage,
+          topicTitle: accTopicTitle,
           visuals: accVisuals.length > 0 ? [...accVisuals] : undefined,
           toolActivities: accActivities.length > 0 ? [...accActivities] : undefined,
         };
@@ -151,6 +158,18 @@ export function App() {
       setStreamingText('');
       setStreamingActivities([]);
       setStreamingVisuals([]);
+    }
+  }
+
+  function handleSelectPillar(_pillarId: CorePillarId, title: string) {
+    void handleSend(`Let's explore ${title}.`);
+  }
+
+  function handleSelectTopic(topic: LearningTopic) {
+    if (topic.kind === 'custom') {
+      void handleSend(`Let's revisit and deepen "${topic.title}".`);
+    } else {
+      void handleSend(`Let's explore ${topic.title}.`);
     }
   }
 
@@ -191,6 +210,9 @@ export function App() {
         <>
           <StageProgressBar
             session={session}
+            disabled={isStreaming}
+            onSelectPillar={handleSelectPillar}
+            onSelectTopic={handleSelectTopic}
             onChangeLevel={handleChangeLevel}
             onOpenSettings={() => setSettingsOpen(true)}
             onResetSession={() => {
@@ -201,10 +223,12 @@ export function App() {
 
           <ChatMessageList
             messages={session.messages}
+            activeTopicTitle={session.learning.activeTopicTitle}
             streamingText={streamingText}
             streamingActivities={streamingActivities}
             streamingVisuals={streamingVisuals}
             isStreaming={isStreaming}
+            onSelectPrompt={(prompt) => void handleSend(prompt)}
           />
 
           {chatError && (
@@ -216,12 +240,14 @@ export function App() {
           )}
 
           <Composer
-            currentStage={session.currentStage}
+            diagnostic={session.diagnostic}
+            activeTopicTitle={session.learning.activeTopicTitle}
+            hasPendingCheckIn={session.learning.pendingCheckIn.length > 0}
             provider={provider}
             observedFilesCount={session.observedFilesCount}
             observedCommitsCount={session.observedCommitsCount}
             disabled={isStreaming}
-            onSend={handleSend}
+            onSend={(prompt) => void handleSend(prompt)}
           />
         </>
       )}

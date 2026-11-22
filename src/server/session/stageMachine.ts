@@ -1,8 +1,22 @@
-import { ONBOARDING_STAGES } from '../../shared/types.js';
-import type { DiagnosticProfile, OnboardingStage, StageMetadata, UserLevel } from '../../shared/types.js';
+import { ONBOARDING_STAGES, PILLAR_TO_STAGE, STAGE_TO_PILLAR } from '../../shared/types.js';
+import type {
+  CorePillarId,
+  DiagnosticProfile,
+  OnboardingStage,
+  StageMetadata,
+  UserLevel,
+} from '../../shared/types.js';
 
 export function getStageMetadata(stage: OnboardingStage): StageMetadata {
   return ONBOARDING_STAGES[stage];
+}
+
+export function pillarToStage(pillarId: CorePillarId): OnboardingStage {
+  return PILLAR_TO_STAGE[pillarId];
+}
+
+export function stageToPillar(stage: OnboardingStage): CorePillarId {
+  return STAGE_TO_PILLAR[stage];
 }
 
 export interface StageTransitionResult {
@@ -12,39 +26,14 @@ export interface StageTransitionResult {
 }
 
 /**
- * Enforces progressive Stage 0 -> 1 -> 2 -> 3 -> 4 discovery unless the user
- * explicitly asked to jump ahead (e.g., inspecting implementation files early).
+ * Non-linear pillar navigation: users and the adaptive mentor can move freely
+ * between any core repository pillar or revisit earlier concepts as knowledge evolves.
  */
 export function validateStageTransition(
-  currentStage: OnboardingStage,
-  targetStage: OnboardingStage,
-  options?: { userRequestedJump?: boolean }
+  _currentStage: OnboardingStage,
+  targetStage: OnboardingStage
 ): StageTransitionResult {
-  if (targetStage === currentStage) {
-    return { allowed: true, nextStage: currentStage };
-  }
-
-  // Moving backward to revisit an earlier stage is always allowed
-  if (targetStage < currentStage) {
-    return { allowed: true, nextStage: targetStage };
-  }
-
-  // Advancing one stage at a time is the normal progressive path
-  if (targetStage === currentStage + 1) {
-    return { allowed: true, nextStage: targetStage };
-  }
-
-  // Jumping ahead multiple stages requires explicit user request
-  if (options?.userRequestedJump) {
-    return { allowed: true, nextStage: targetStage };
-  }
-
-  const nextProgressive = Math.min(4, currentStage + 1) as OnboardingStage;
-  return {
-    allowed: false,
-    nextStage: nextProgressive,
-    reason: `Progressive onboarding rule: establish Stage ${nextProgressive} (${ONBOARDING_STAGES[nextProgressive].title}) before jumping to Stage ${targetStage}, unless the user explicitly asks to jump ahead.`,
-  };
+  return { allowed: true, nextStage: targetStage };
 }
 
 /**
@@ -53,25 +42,22 @@ export function validateStageTransition(
 export function inferUserLevelFromText(text: string, fallback: UserLevel = 'intermediate'): UserLevel {
   const lower = text.toLowerCase();
 
-  // Explicit recalibration / strong foundational signals
   const foundationalPatterns = [
-    /\b(beginner|new to|never used|first time|foundational|junior|student|learning|novice)\b/,
-    /\b(simpler|simplify|eli5|plain english|high[- ]level only|less jargon|basic|gentle)\b/,
+    /\b(beginner|new to|never used|first time|foundational|junior|student|learning|novice|low)\b/,
+    /\b(simpler|simplify|eli5|plain english|high[- ]level only|less jargon|basic|gentle|conceptual)\b/,
   ];
   if (foundationalPatterns.some((re) => re.test(lower))) {
     return 'foundational';
   }
 
-  // Strong advanced signals
   const advancedPatterns = [
-    /\b(advanced|senior|staff|principal|architect|deep dive|expert|years of experience|very familiar)\b/,
+    /\b(advanced|senior|staff|principal|architect|deep dive|expert|years of experience|very familiar|high)\b/,
     /\b(go deeper|more technical|under the hood|internals|trade[- ]?offs|invariants|low[- ]level)\b/,
   ];
   if (advancedPatterns.some((re) => re.test(lower))) {
     return 'advanced';
   }
 
-  // Explicit intermediate signals
   const intermediatePatterns = [
     /\b(intermediate|mid[- ]level|some experience|familiar with|comfortable with|moderate|balanced)\b/,
   ];
@@ -99,28 +85,6 @@ export function detectRecalibrationSignal(text: string, currentLevel: UserLevel)
   }
 
   return null;
-}
-
-/**
- * Detects whether the user explicitly asks to jump ahead to code, flows, or git history.
- */
-export function detectJumpAheadRequest(text: string): { requested: boolean; targetStage?: OnboardingStage } {
-  const lower = text.toLowerCase();
-
-  if (/\b(jump to|skip to|go straight to|show me the code|dive straight into|jump ahead)\b/.test(lower)) {
-    if (/\b(git|history|commit|churn|evolution|next steps)\b/.test(lower)) {
-      return { requested: true, targetStage: 4 };
-    }
-    if (/\b(flow|code|implementation|entry ?point|function|symbol|trace)\b/.test(lower)) {
-      return { requested: true, targetStage: 3 };
-    }
-    if (/\b(arch|module|component|structure|diagram)\b/.test(lower)) {
-      return { requested: true, targetStage: 2 };
-    }
-    return { requested: true, targetStage: 3 };
-  }
-
-  return { requested: false };
 }
 
 /**
