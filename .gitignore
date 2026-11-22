@@ -1,11 +1,26 @@
+# Dependencies & caches
 node_modules/
 .pnpm-store/
+
+# Build & test outputs
 dist/
+coverage/
+
+# Environment & secrets
 .env
 .env.*
 !.env.example
+.envrc
+*.pem
+*.key
+*.p12
+*.pfx
+.scavenger/
+
+# Editor swap/backup & OS files
 *.swp
 *.swo
+*.swn
+*~
 .DS_Store
 *.log
-coverage/
