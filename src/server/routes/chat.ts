@@ -37,11 +37,19 @@ chatRouter.post('/:id/chat', async (c) => {
   }
 
   return streamSSE(c, async (stream) => {
+    let writeQueue: Promise<void> = Promise.resolve();
+
     const emit = (event: SSEEvent) => {
-      void stream.writeSSE({
-        event: event.type,
-        data: JSON.stringify(event),
-      });
+      writeQueue = writeQueue
+        .then(() =>
+          stream.writeSSE({
+            event: event.type,
+            data: JSON.stringify(event),
+          })
+        )
+        .catch(() => {
+          // Client disconnected
+        });
     };
 
     try {
@@ -53,6 +61,9 @@ chatRouter.post('/:id/chat', async (c) => {
       );
     } catch {
       // Error event already emitted by orchestrator
+    } finally {
+      // Ensure every queued SSE frame (including final `done` / `error`) flushes before closing
+      await writeQueue;
     }
   });
 });

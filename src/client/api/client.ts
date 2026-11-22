@@ -91,28 +91,39 @@ export async function streamChatTurn(
   const decoder = new TextDecoder();
   let buffer = '';
 
+  const dispatchFrame = (rawFrame: string) => {
+    const dataLines = rawFrame
+      .split('\n')
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice(5).trim());
+
+    if (dataLines.length === 0) return;
+    const payload = dataLines.join('\n');
+    try {
+      const parsed = JSON.parse(payload) as SSEEvent;
+      onEvent(parsed);
+    } catch {
+      // Ignore malformed partial frame
+    }
+  };
+
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+    buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
 
     const frames = buffer.split('\n\n');
     buffer = frames.pop() ?? '';
 
     for (const frame of frames) {
-      const dataLines = frame
-        .split('\n')
-        .filter((line) => line.startsWith('data:'))
-        .map((line) => line.slice(5).trim());
+      dispatchFrame(frame);
+    }
+  }
 
-      if (dataLines.length === 0) continue;
-      const payload = dataLines.join('\n');
-      try {
-        const parsed = JSON.parse(payload) as SSEEvent;
-        onEvent(parsed);
-      } catch {
-        // Ignore malformed partial frame
-      }
+  buffer += decoder.decode().replace(/\r\n/g, '\n');
+  if (buffer.trim()) {
+    for (const frame of buffer.split('\n\n')) {
+      dispatchFrame(frame);
     }
   }
 }

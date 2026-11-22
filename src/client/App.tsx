@@ -81,26 +81,30 @@ export function App() {
     setStreamingActivities([]);
     setStreamingVisuals([]);
 
+    let receivedDone = false;
+    let accText = '';
+    let accStage = session.currentStage;
+    const accActivities: ToolActivity[] = [];
+    const accVisuals: VisualArtifact[] = [];
+
     try {
       await streamChatTurn(
         session.id,
         text,
         (event) => {
           if (event.type === 'text-delta') {
-            setStreamingText((prev) => prev + event.delta);
+            accText += event.delta;
+            setStreamingText(accText);
           } else if (event.type === 'tool-activity') {
-            setStreamingActivities((prev) => {
-              const idx = prev.findIndex((a) => a.id === event.activity.id);
-              if (idx >= 0) {
-                const next = [...prev];
-                next[idx] = event.activity;
-                return next;
-              }
-              return [...prev, event.activity];
-            });
+            const idx = accActivities.findIndex((a) => a.id === event.activity.id);
+            if (idx >= 0) accActivities[idx] = event.activity;
+            else accActivities.push(event.activity);
+            setStreamingActivities([...accActivities]);
           } else if (event.type === 'visual') {
-            setStreamingVisuals((prev) => [...prev, event.visual]);
+            accVisuals.push(event.visual);
+            setStreamingVisuals([...accVisuals]);
           } else if (event.type === 'session-state') {
+            accStage = event.currentStage;
             setSession((prev) =>
               prev
                 ? {
@@ -114,6 +118,7 @@ export function App() {
                 : prev
             );
           } else if (event.type === 'done') {
+            receivedDone = true;
             setSession((prev) =>
               prev ? { ...prev, messages: [...prev.messages, event.message] } : prev
             );
@@ -123,6 +128,22 @@ export function App() {
         },
         provider
       );
+
+      // Defensive fallback: never discard already-streamed content if stream closed without `done`
+      if (!receivedDone && (accText.trim() || accVisuals.length > 0)) {
+        const fallbackMessage: ChatMessage = {
+          id: `msg_fallback_${Date.now()}`,
+          role: 'assistant',
+          content: accText.trim() || '(Visual response)',
+          createdAt: new Date().toISOString(),
+          stage: accStage,
+          visuals: accVisuals.length > 0 ? [...accVisuals] : undefined,
+          toolActivities: accActivities.length > 0 ? [...accActivities] : undefined,
+        };
+        setSession((prev) =>
+          prev ? { ...prev, messages: [...prev.messages, fallbackMessage] } : prev
+        );
+      }
     } catch (err) {
       setChatError(err instanceof Error ? err.message : 'Chat stream failed.');
     } finally {
