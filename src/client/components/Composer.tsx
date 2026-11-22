@@ -69,11 +69,15 @@ export function Composer({
       ]
     : [
         { label: 'Explain simpler', prompt: 'Can you explain that simpler with a clearer mental model?' },
-        { label: 'Go deeper', prompt: 'Go deeper on the internals, code structure, and trade-offs.' },
         {
-          label: 'Test my understanding',
-          prompt: `Ask me 2 quick scenario questions to test my understanding of ${activeTopicTitle}.`,
+          label: 'Walk through a real example',
+          prompt: `Walk me step-by-step through a concrete runtime example of ${activeTopicTitle} over time.`,
         },
+        {
+          label: "What's subtle or tricky here?",
+          prompt: `What are the subtle behaviors, edge cases, or hidden interdependencies in ${activeTopicTitle} that usually trip people up?`,
+        },
+        { label: 'Go deeper', prompt: 'Go deeper on the internals, code contracts, and trade-offs.' },
       ];
 
   const placeholder = !diagnostic.completed

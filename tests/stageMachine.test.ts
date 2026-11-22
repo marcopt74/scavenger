@@ -65,10 +65,12 @@ describe('adaptive non-linear onboarding & mastery progression', () => {
       return { msg, events };
     };
 
-    // Turn 1: User answers calibration -> Purpose lesson + <=3 check-in Qs + 2-3 next steps
+    // Turn 1: User answers calibration -> Purpose lesson + mentor callouts + <=3 check-in Qs + 2-3 next steps
     const t1 = await runTurn('I am new to this stack and want mental models first.');
     expect(session.diagnostic.inferredLevel).toBe('foundational');
     expect(session.learning.activeTopicId).toBe('pillar:purpose');
+    expect(t1.msg.content).toContain('Subtle behavior to notice');
+    expect(t1.msg.content).toContain('Mental model to keep');
     expect(t1.msg.checkInQuestions?.length).toBeGreaterThanOrEqual(1);
     expect(t1.msg.checkInQuestions?.length).toBeLessThanOrEqual(3);
     expect(t1.msg.suggestedNextSteps?.length).toBeGreaterThanOrEqual(2);
@@ -79,6 +81,7 @@ describe('adaptive non-linear onboarding & mastery progression', () => {
     expect(session.learning.activeTopicId).toBe('custom:tokenguard');
     expect(session.learning.topics.some((t) => t.id === 'custom:tokenguard' && t.kind === 'custom')).toBe(true);
     expect(t2.msg.content).toContain('src/auth/tokenGuard.ts');
+    expect(t2.msg.content).toContain('Subtle behavior to notice');
     expect(t2.msg.visuals?.some((v) => v.kind === 'mermaid')).toBe(true);
     expect(t2.msg.checkInQuestions?.length).toBeLessThanOrEqual(3);
     expect(t2.msg.suggestedNextSteps?.length).toBeGreaterThanOrEqual(2);

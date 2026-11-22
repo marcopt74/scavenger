@@ -107,8 +107,8 @@ export async function runOnboardingTurn(
         system,
         messages: conversation,
         tools,
-        stopWhen: stepCountIs(12),
-        temperature: 0.3,
+        stopWhen: stepCountIs(14),
+        temperature: 0.5,
       });
 
       for await (const delta of result.textStream) {

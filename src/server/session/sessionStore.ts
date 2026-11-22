@@ -175,39 +175,40 @@ export function toPublicState(session: InternalSession): SessionPublicState {
 }
 
 function buildStage0OpeningMessage(recon: RootReconSummary): string {
-  const stackLine =
+  const stackPhrase =
     recon.detectedStack.length > 0
-      ? `**Detected stack:** ${recon.detectedStack.join(', ')}`
-      : '**Detected stack:** General codebase (inspecting structure next)';
-
-  const manifestList =
-    recon.manifests.length > 0
-      ? recon.manifests.map((m) => `\`${m.path}\``).slice(0, 5).join(', ')
-      : 'no standard package manifest at root';
+      ? recon.detectedStack.slice(0, 5).join(', ')
+      : 'a general codebase whose exact tooling we can unpack together';
 
   const topDirs = recon.topLevelEntries
     .filter((e) => e.type === 'dir')
-    .slice(0, 6)
-    .map((e) => `\`${e.name}/\``)
-    .join(', ');
+    .slice(0, 5)
+    .map((e) => `\`${e.name}/\``);
 
-  const gitLine = recon.isGitRepo
+  const manifestNames = recon.manifests.map((m) => `\`${m.path}\``).slice(0, 4);
+
+  const layoutSentence =
+    topDirs.length > 0
+      ? `At the root, the project separates its moving parts across ${topDirs.join(', ')}, anchored by ${manifestNames.length > 0 ? manifestNames.join(', ') : 'its top-level configuration files'}${recon.readmePath ? ` and documented in \`${recon.readmePath}\`` : ''}.`
+      : `At the root, the repository keeps a compact layout anchored by ${manifestNames.length > 0 ? manifestNames.join(', ') : 'its top-level files'}${recon.readmePath ? ` and \`${recon.readmePath}\`` : ''}.`;
+
+  const gitSentence = recon.isGitRepo
     ? recon.recentMilestones.length > 0
-      ? `Git history is available (${recon.branch ? `branch \`${recon.branch}\`, ` : ''}latest commit \`${recon.recentMilestones[0].shortHash}\` on ${recon.recentMilestones[0].date}).`
-      : `Initialized Git repository${recon.branch ? ` on \`${recon.branch}\`` : ''} (no commits recorded yet).`
-    : 'No `.git` history detected in this folder (filesystem inspection only).';
+      ? `Git history is live too—we're looking at branch \`${recon.branch ?? 'HEAD'}\`, with the latest milestone \`${recon.recentMilestones[0].shortHash}\` (*"${recon.recentMilestones[0].subject}"*) on ${recon.recentMilestones[0].date}, which means we can also trace *why* decisions evolved over time.`
+      : `This folder is an initialized Git repository${recon.branch ? ` on \`${recon.branch}\`` : ''}, ready to inspect from the filesystem up.`
+    : `There's no \`.git\` history in this directory, so we'll learn directly from the codebase structure and live file interactions.`;
 
   return [
-    `I've completed an initial read-only root reconnaissance of **\`${recon.repoName}\`**.`,
+    `Welcome aboard! I just took a quick read-only walk around the root of **\`${recon.repoName}\`** so we can start from solid ground rather than guessing.`,
     '',
-    `- ${stackLine}`,
-    `- **Root signals:** ${recon.readmePath ? `\`${recon.readmePath}\`, ` : ''}${manifestList}${topDirs ? ` · top directories: ${topDirs}` : ''}`,
-    `- **History:** ${gitLine}`,
+    `From the first glance, this looks like a **${stackPhrase}** repository. ${layoutSentence} ${gitSentence}`,
     '',
-    `You can guide this learning session in any direction. To tailor depth right away, feel free to share a quick calibration — **or skip straight ahead by clicking a topic below or telling me anything you want to learn first**:`,
+    `Think of this session like a pair of engineers at a whiteboard: we'll start from clear mental models and work our way into how pieces depend on one another, how they behave over time, and the subtle details that usually trip newcomers up.`,
     '',
-    `1. **Stack familiarity:** How comfortable are you with ${recon.detectedStack.length > 0 ? recon.detectedStack.slice(0, 3).join(' / ') : 'this tech stack'}?`,
-    `2. **Your goal:** What brings you into \`${recon.repoName}\` today (orientation, architecture review, fixing a bug, adding a feature)?`,
-    `3. **Preferred style:** Conceptual mental models first, balanced engineering detail, or internals & trade-offs?`,
+    `Before I shape our first lesson, tell me a little about where you're starting from *(or skip straight ahead by clicking a topic below or naming anything you want to learn first)*:`,
+    '',
+    `1. **Comfort with the stack:** How familiar are you with ${recon.detectedStack.length > 0 ? recon.detectedStack.slice(0, 3).join(' / ') : 'these tools'}?`,
+    `2. **What brings you here:** Are you orienting yourself, reviewing architecture, hunting a bug, or preparing to build a feature?`,
+    `3. **How you like to learn:** Big-picture mental models first, balanced engineering walkthroughs, or deep internals and trade-offs?`,
   ].join('\n');
 }
