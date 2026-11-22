@@ -1,0 +1,11 @@
+node_modules/
+.pnpm-store/
+dist/
+.env
+.env.*
+!.env.example
+*.swp
+*.swo
+.DS_Store
+*.log
+coverage/
