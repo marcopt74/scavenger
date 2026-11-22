@@ -8,6 +8,7 @@ import { cors } from 'hono/cors';
 import type { HealthInfo } from '../shared/types.js';
 import { DEFAULT_MODELS, getConfiguredProviders, getDefaultProviderSelection } from './config.js';
 import { chatRouter } from './routes/chat.js';
+import { fsRouter } from './routes/fs.js';
 import { sessionsRouter } from './routes/sessions.js';
 import { visualsRouter } from './routes/visuals.js';
 import { checkD2Available, isImageGenConfigured } from './tools/visualTools.js';
@@ -34,6 +35,7 @@ export function createApp(): Hono {
   app.route('/api/sessions', sessionsRouter);
   app.route('/api/sessions', chatRouter);
   app.route('/api/render', visualsRouter);
+  app.route('/api/fs', fsRouter);
 
   // Serve built client assets in production if dist/client exists
   const clientDist = path.resolve(process.cwd(), 'dist/client');

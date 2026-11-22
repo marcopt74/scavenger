@@ -243,3 +243,33 @@ export interface HealthInfo {
   imageGenAvailable: boolean;
   suggestedRepoPath: string;
 }
+
+export interface DirectoryEntry {
+  name: string;
+  path: string;
+  isGitRepo: boolean;
+  isHidden: boolean;
+  isSymlink: boolean;
+}
+
+export interface DirectoryBreadcrumb {
+  name: string;
+  path: string;
+}
+
+export interface DirectoryShortcut {
+  label: string;
+  path: string;
+  kind: 'home' | 'workspace' | 'folder' | 'root';
+}
+
+export interface DirectoryBrowseResponse {
+  currentPath: string;
+  parentPath: string | null;
+  isCurrentGitRepo: boolean;
+  breadcrumbs: DirectoryBreadcrumb[];
+  entries: DirectoryEntry[];
+  fileCount: number;
+  truncated: boolean;
+  shortcuts: DirectoryShortcut[];
+}

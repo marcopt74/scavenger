@@ -1,6 +1,7 @@
-import { ArrowRight, FolderOpen, Lock, Settings2, Sparkles } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowRight, FolderGit2, FolderOpen, Lock, Settings2, Sparkles } from 'lucide-react';
+import { useRef, useState } from 'react';
 import type { HealthInfo, ProviderSelection } from '../../shared/types';
+import { FileExplorerModal } from './FileExplorerModal';
 
 interface RepoWelcomeProps {
   health: HealthInfo | null;
@@ -20,6 +21,8 @@ export function RepoWelcome({
   onOpenSettings,
 }: RepoWelcomeProps) {
   const [repoPath, setRepoPath] = useState('');
+  const [explorerOpen, setExplorerOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -44,8 +47,9 @@ export function RepoWelcome({
         </p>
 
         <form className="repo-form" onSubmit={handleSubmit}>
-          <FolderOpen size={18} color="#5f6368" />
+          <FolderGit2 size={18} color="#5f6368" className="repo-form-icon" />
           <input
+            ref={inputRef}
             type="text"
             className="repo-input"
             value={repoPath}
@@ -54,6 +58,17 @@ export function RepoWelcome({
             disabled={loading}
             autoFocus
           />
+          <button
+            type="button"
+            className="repo-browse-btn"
+            disabled={loading}
+            onClick={() => setExplorerOpen(true)}
+            title="Browse folders on disk"
+            aria-label="Browse folders on disk"
+          >
+            <FolderOpen size={15} />
+            <span>Browse</span>
+          </button>
           <button
             type="submit"
             className="primary-pill-btn"
@@ -117,6 +132,18 @@ export function RepoWelcome({
           </div>
         </div>
       </div>
+
+      {explorerOpen && (
+        <FileExplorerModal
+          initialPath={repoPath.trim() || undefined}
+          onSelect={(selectedPath) => {
+            setRepoPath(selectedPath);
+            setExplorerOpen(false);
+            requestAnimationFrame(() => inputRef.current?.focus());
+          }}
+          onClose={() => setExplorerOpen(false)}
+        />
+      )}
     </div>
   );
 }

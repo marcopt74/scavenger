@@ -1,4 +1,5 @@
 import type {
+  DirectoryBrowseResponse,
   HealthInfo,
   OnboardingStage,
   ProviderSelection,
@@ -13,6 +14,29 @@ export async function fetchHealth(): Promise<HealthInfo> {
     throw new Error(`Health check failed (${res.status})`);
   }
   return res.json() as Promise<HealthInfo>;
+}
+
+export async function browseDirectory(
+  options?: {
+    path?: string;
+    showHidden?: boolean;
+    fallback?: boolean;
+  },
+  signal?: AbortSignal
+): Promise<DirectoryBrowseResponse> {
+  const params = new URLSearchParams();
+  if (options?.path) params.set('path', options.path);
+  if (options?.showHidden) params.set('showHidden', 'true');
+  if (options?.fallback) params.set('fallback', 'true');
+
+  const query = params.toString();
+  const res = await fetch(`/api/fs/browse${query ? `?${query}` : ''}`, { signal });
+  const data = (await res.json()) as Partial<DirectoryBrowseResponse> & { error?: string };
+
+  if (!res.ok || !data.currentPath) {
+    throw new Error(data.error || `Failed to browse directory (${res.status})`);
+  }
+  return data as DirectoryBrowseResponse;
 }
 
 export async function createSession(
