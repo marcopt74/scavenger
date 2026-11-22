@@ -1,6 +1,6 @@
 {
   "name": "scavenger",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "Read-only Repository Onboarding Agent with a minimalist Gemini-inspired chat interface",
