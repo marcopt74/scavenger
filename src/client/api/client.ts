@@ -3,8 +3,12 @@ import type {
   HealthInfo,
   OnboardingStage,
   ProviderSelection,
+  PublicSettings,
   SSEEvent,
   SessionPublicState,
+  TestConnectionPayload,
+  TestConnectionResult,
+  UpdateSettingsPayload,
   UserLevel,
 } from '../../shared/types';
 
@@ -14,6 +18,55 @@ export async function fetchHealth(): Promise<HealthInfo> {
     throw new Error(`Health check failed (${res.status})`);
   }
   return res.json() as Promise<HealthInfo>;
+}
+
+export async function fetchSettings(): Promise<PublicSettings> {
+  const res = await fetch('/api/settings');
+  const data = (await res.json()) as { settings?: PublicSettings; error?: string };
+  if (!res.ok || !data.settings) {
+    throw new Error(data.error || `Failed to load settings (${res.status})`);
+  }
+  return data.settings;
+}
+
+export async function saveSettings(
+  payload: UpdateSettingsPayload
+): Promise<{ settings: PublicSettings; health: HealthInfo }> {
+  const res = await fetch('/api/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = (await res.json()) as {
+    settings?: PublicSettings;
+    health?: HealthInfo;
+    error?: string;
+  };
+  if (!res.ok || !data.settings || !data.health) {
+    throw new Error(data.error || `Failed to save settings (${res.status})`);
+  }
+  return { settings: data.settings, health: data.health };
+}
+
+export async function testProviderConnection(
+  payload: TestConnectionPayload
+): Promise<TestConnectionResult> {
+  const res = await fetch('/api/settings/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = (await res.json()) as Partial<TestConnectionResult> & { error?: string };
+  if (!res.ok) {
+    throw new Error(data.error || `Connection test failed (${res.status})`);
+  }
+  return {
+    ok: Boolean(data.ok),
+    provider: data.provider ?? payload.provider,
+    model: data.model ?? payload.model ?? '',
+    latencyMs: data.latencyMs ?? 0,
+    message: data.message ?? (data.ok ? 'Connected.' : 'Connection failed.'),
+  };
 }
 
 export async function browseDirectory(

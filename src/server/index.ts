@@ -10,6 +10,7 @@ import { DEFAULT_MODELS, getConfiguredProviders, getDefaultProviderSelection } f
 import { chatRouter } from './routes/chat.js';
 import { fsRouter } from './routes/fs.js';
 import { sessionsRouter } from './routes/sessions.js';
+import { settingsRouter } from './routes/settings.js';
 import { visualsRouter } from './routes/visuals.js';
 import { checkD2Available, isImageGenConfigured } from './tools/visualTools.js';
 
@@ -24,6 +25,7 @@ export function createApp(): Hono {
       ok: true,
       defaultProvider: selection.provider,
       defaultModel: selection.model || DEFAULT_MODELS[selection.provider],
+      defaultBaseUrl: selection.baseUrl,
       configuredProviders: getConfiguredProviders(),
       d2Available: await checkD2Available(),
       imageGenAvailable: isImageGenConfigured(),
@@ -36,6 +38,7 @@ export function createApp(): Hono {
   app.route('/api/sessions', chatRouter);
   app.route('/api/render', visualsRouter);
   app.route('/api/fs', fsRouter);
+  app.route('/api/settings', settingsRouter);
 
   // Serve built client assets in production if dist/client exists
   const clientDist = path.resolve(process.cwd(), 'dist/client');

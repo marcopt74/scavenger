@@ -1,30 +1,14 @@
-import { Download, Maximize2, X } from 'lucide-react';
-import mermaid from 'mermaid';
-import { useEffect, useId, useState } from 'react';
+import { Check, Copy, Download, ImageDown, Maximize2, PenTool, Sparkles } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { renderD2Diagram } from '../api/client';
-
-let mermaidInitialized = false;
-
-function ensureMermaidInit(): void {
-  if (mermaidInitialized) return;
-  mermaid.initialize({
-    startOnLoad: false,
-    securityLevel: 'strict',
-    theme: 'base',
-    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
-    themeVariables: {
-      primaryColor: '#eef4ff',
-      primaryTextColor: '#1f2937',
-      primaryBorderColor: '#93c5fd',
-      lineColor: '#64748b',
-      secondaryColor: '#f8fafc',
-      tertiaryColor: '#f1f5f9',
-      edgeLabelBackground: '#ffffff',
-      fontSize: '13.5px',
-    },
-  });
-  mermaidInitialized = true;
-}
+import {
+  downloadSvgAsPng,
+  downloadSvgMarkup,
+  prepareSvgForLightbox,
+  renderMermaidSvg,
+} from '../utils/mermaidTheme';
+import type { MermaidLook } from '../utils/mermaidTheme';
+import { VisualLightbox } from './VisualLightbox';
 
 export interface DiagramCardProps {
   format: 'mermaid' | 'd2';
@@ -43,14 +27,15 @@ export function DiagramCard({
   preRenderedSvg,
   preRenderError,
 }: DiagramCardProps) {
-  const uniqueId = useId().replace(/[^a-zA-Z0-9_-]/g, '');
+  const [look, setLook] = useState<MermaidLook>('classic');
   const [svg, setSvg] = useState<string | null>(preRenderedSvg ?? null);
   const [error, setError] = useState<string | null>(preRenderError ?? null);
   const [loading, setLoading] = useState<boolean>(!preRenderedSvg && !preRenderError);
   const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (preRenderedSvg || preRenderError) {
+    if (format === 'd2' && (preRenderedSvg || preRenderError)) {
       setSvg(preRenderedSvg ?? null);
       setError(preRenderError ?? null);
       setLoading(false);
@@ -64,9 +49,7 @@ export function DiagramCard({
     async function render() {
       try {
         if (format === 'mermaid') {
-          ensureMermaidInit();
-          const renderId = `mmd_${uniqueId}_${Date.now()}`;
-          const { svg: renderedSvg } = await mermaid.render(renderId, source.trim());
+          const renderedSvg = await renderMermaidSvg(source, look);
           if (!cancelled) {
             setSvg(renderedSvg);
             setLoading(false);
@@ -94,59 +77,112 @@ export function DiagramCard({
     return () => {
       cancelled = true;
     };
-  }, [format, source, preRenderedSvg, preRenderError, uniqueId]);
+  }, [format, source, look, preRenderedSvg, preRenderError]);
 
-  function handleDownloadSvg() {
-    if (!svg) return;
-    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'diagram'}.svg`;
-    a.click();
-    URL.revokeObjectURL(url);
+  async function handleCopySource() {
+    try {
+      await navigator.clipboard.writeText(source);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      // ignore clipboard denial
+    }
   }
+
+  const badgeLabel = format === 'mermaid' ? 'Diagram' : 'D2';
+  const badgeClass = format === 'mermaid' ? 'kind-mermaid' : 'kind-d2';
+  const lightboxSvg = useMemo(
+    () => (expanded && svg ? prepareSvgForLightbox(svg) : null),
+    [expanded, svg]
+  );
 
   return (
     <>
       <figure className="visual-card" style={{ margin: 0 }}>
         <div className="visual-card-header">
           <div className="visual-card-title-group">
-            <span className="visual-kind-badge">{format.toUpperCase()}</span>
-            <span className="visual-card-title">{title}</span>
+            <span className={`visual-kind-badge ${badgeClass}`}>{badgeLabel}</span>
+            <span className="visual-card-title" title={title}>
+              {title}
+            </span>
           </div>
-          {svg && (
-            <div className="visual-card-actions">
+
+          <div className="visual-card-actions">
+            {format === 'mermaid' && svg && (
               <button
                 type="button"
-                className="visual-action-btn"
-                onClick={handleDownloadSvg}
-                title="Download SVG"
+                className={`visual-action-btn ${look === 'handDrawn' ? 'is-active' : ''}`}
+                onClick={() => setLook((prev) => (prev === 'classic' ? 'handDrawn' : 'classic'))}
+                title={
+                  look === 'handDrawn'
+                    ? 'Switch to crisp architectural vector style'
+                    : 'Switch to whiteboard sketch style'
+                }
               >
-                <Download size={14} />
-                <span>SVG</span>
+                {look === 'handDrawn' ? <Sparkles size={13} /> : <PenTool size={13} />}
+                <span>{look === 'handDrawn' ? 'Clean' : 'Sketch'}</span>
               </button>
-              <button
-                type="button"
-                className="visual-action-btn"
-                onClick={() => setExpanded(true)}
-                title="Expand diagram"
-              >
-                <Maximize2 size={14} />
-                <span>Expand</span>
-              </button>
-            </div>
-          )}
+            )}
+
+            <button
+              type="button"
+              className="visual-action-btn"
+              onClick={() => void handleCopySource()}
+              title="Copy diagram source"
+            >
+              {copied ? <Check size={13} /> : <Copy size={13} />}
+              <span>{copied ? 'Copied' : 'Source'}</span>
+            </button>
+
+            {svg && (
+              <>
+                <button
+                  type="button"
+                  className="visual-action-btn"
+                  onClick={() => downloadSvgMarkup(svg, title)}
+                  title="Download SVG"
+                >
+                  <Download size={13} />
+                  <span>SVG</span>
+                </button>
+                <button
+                  type="button"
+                  className="visual-action-btn"
+                  onClick={() => void downloadSvgAsPng(svg, title)}
+                  title="Download 2x PNG"
+                >
+                  <ImageDown size={13} />
+                  <span>PNG</span>
+                </button>
+                <button
+                  type="button"
+                  className="visual-action-btn"
+                  onClick={() => setExpanded(true)}
+                  title="Expand diagram with zoom & pan"
+                >
+                  <Maximize2 size={13} />
+                  <span>Expand</span>
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
-        <div className="visual-card-body">
-          {loading ? (
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '18px 0' }}>
-              Rendering visual diagram…
+        <div className="visual-card-body diagram-canvas">
+          {loading && !svg ? (
+            <div className="visual-skeleton" aria-label="Rendering diagram">
+              <div className="visual-skeleton-row">
+                <div className="visual-skeleton-box" />
+                <div className="visual-skeleton-line" />
+                <div className="visual-skeleton-box wide" />
+                <div className="visual-skeleton-line" />
+                <div className="visual-skeleton-box" />
+              </div>
+              <span className="visual-skeleton-label">Rendering diagram…</span>
             </div>
           ) : svg ? (
             <div
-              className="visual-svg-host"
+              className={`visual-svg-host diagram-svg-host ${loading ? 'is-refreshing' : ''}`}
               dangerouslySetInnerHTML={{ __html: svg }}
             />
           ) : (
@@ -168,26 +204,24 @@ export function DiagramCard({
         {caption && <figcaption className="visual-card-caption">{caption}</figcaption>}
       </figure>
 
-      {expanded && svg && (
-        <div className="modal-backdrop" onClick={() => setExpanded(false)}>
-          <div className="lightbox-panel" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>{title}</h3>
-              <button
-                type="button"
-                className="icon-button"
-                onClick={() => setExpanded(false)}
-                aria-label="Close expanded diagram"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div
-              className="lightbox-body"
-              dangerouslySetInnerHTML={{ __html: svg }}
-            />
-          </div>
-        </div>
+      {expanded && svg && lightboxSvg && (
+        <VisualLightbox
+          title={title}
+          badge={badgeLabel}
+          badgeClass={badgeClass}
+          caption={caption}
+          canvasStyle="diagram"
+          onDownloadSecondary={() => downloadSvgMarkup(svg, title)}
+          downloadSecondaryLabel="SVG"
+          onDownloadPrimary={() => void downloadSvgAsPng(svg, title)}
+          downloadPrimaryLabel="PNG"
+          onClose={() => setExpanded(false)}
+        >
+          <div
+            className="lightbox-svg-inner"
+            dangerouslySetInnerHTML={{ __html: lightboxSvg }}
+          />
+        </VisualLightbox>
       )}
     </>
   );

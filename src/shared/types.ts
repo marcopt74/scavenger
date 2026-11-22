@@ -150,6 +150,15 @@ export interface RootReconSummary {
   inspectedAt: string;
 }
 
+export type ConceptVisualLayout = 'pipeline' | 'hub' | 'layers';
+
+export type ConceptVisualAccent = 'cobalt' | 'emerald' | 'violet' | 'amber';
+
+export interface ConceptVisualElement {
+  label: string;
+  role: string;
+}
+
 export type VisualArtifact =
   | {
       id: string;
@@ -173,6 +182,9 @@ export type VisualArtifact =
       title: string;
       caption?: string;
       metaphor?: string;
+      layout?: ConceptVisualLayout;
+      accent?: ConceptVisualAccent;
+      elements?: ConceptVisualElement[];
       imageDataUrl?: string;
       svgMarkup?: string;
       isFallback: boolean;
@@ -238,10 +250,103 @@ export interface HealthInfo {
   ok: boolean;
   defaultProvider: ProviderId;
   defaultModel: string;
+  defaultBaseUrl?: string;
   configuredProviders: Record<ProviderId, boolean>;
   d2Available: boolean;
   imageGenAvailable: boolean;
   suggestedRepoPath: string;
+}
+
+export type SecretSource = 'settings' | 'env' | 'none';
+
+export interface ProviderModelPreset {
+  id: string;
+  label: string;
+  note: string;
+}
+
+export const PROVIDER_MODEL_PRESETS: Record<ProviderId, readonly ProviderModelPreset[]> = {
+  google: [
+    { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', note: 'Fast & balanced' },
+    { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', note: 'Deep reasoning' },
+    { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', note: 'Lightweight' },
+  ],
+  openai: [
+    { id: 'gpt-4o', label: 'GPT-4o', note: 'Versatile flagship' },
+    { id: 'gpt-4.1', label: 'GPT-4.1', note: 'Strong code analysis' },
+    { id: 'gpt-4.1-mini', label: 'GPT-4.1 Mini', note: 'Fast & economical' },
+    { id: 'o3-mini', label: 'o3-mini', note: 'Reasoning model' },
+  ],
+  anthropic: [
+    { id: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4', note: 'Architectural clarity' },
+    { id: 'claude-3-7-sonnet-latest', label: 'Claude 3.7 Sonnet', note: 'Deep code mentor' },
+    { id: 'claude-3-5-haiku-latest', label: 'Claude 3.5 Haiku', note: 'Fast responses' },
+  ],
+  'openai-compatible': [
+    { id: 'llama3.2', label: 'Llama 3.2', note: 'Local Ollama default' },
+    { id: 'qwen2.5-coder:14b', label: 'Qwen 2.5 Coder 14B', note: 'Code specialist' },
+    { id: 'deepseek-r1:14b', label: 'DeepSeek R1 14B', note: 'Local reasoning' },
+  ],
+  demo: [
+    { id: 'local-grounded-demo', label: 'Local Grounded Demo', note: 'Zero API key' },
+  ],
+};
+
+export interface ProviderPublicConfig {
+  provider: ProviderId;
+  model: string;
+  baseUrl?: string;
+  hasKey: boolean;
+  maskedKey?: string;
+  keySource: SecretSource;
+  ready: boolean;
+}
+
+export interface VisualPublicSettings {
+  imageGenEnabled: boolean;
+  geminiImageModel: string;
+  openaiImageModel: string;
+  imageGenAvailable: boolean;
+  d2Available: boolean;
+}
+
+export interface PublicSettings {
+  activeProvider: ProviderId;
+  providers: Record<ProviderId, ProviderPublicConfig>;
+  visuals: VisualPublicSettings;
+  storagePath: string;
+}
+
+export interface ProviderUpdateInput {
+  model?: string;
+  baseUrl?: string;
+  apiKey?: string;
+  clearApiKey?: boolean;
+}
+
+export interface UpdateSettingsPayload {
+  activeProvider?: ProviderId;
+  providers?: Partial<Record<Exclude<ProviderId, 'demo'>, ProviderUpdateInput>>;
+  visuals?: {
+    imageGenEnabled?: boolean;
+    geminiImageModel?: string;
+    openaiImageModel?: string;
+  };
+}
+
+export interface TestConnectionPayload {
+  provider: ProviderId;
+  model?: string;
+  baseUrl?: string;
+  apiKey?: string;
+}
+
+export interface TestConnectionResult {
+  ok: boolean;
+  provider: ProviderId;
+  model: string;
+  latencyMs: number;
+  message: string;
 }
 
 export interface DirectoryEntry {

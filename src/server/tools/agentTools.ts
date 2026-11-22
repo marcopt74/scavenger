@@ -321,7 +321,7 @@ export function createAgentTools(session: InternalSession, ctx: ToolContextCallb
 
     render_diagram: tool({
       description:
-        'Render an inline visual diagram (SVG) directly in the chat UI. Prefer format="mermaid" unless D2 is explicitly available and beneficial. Use clear, concise node labels without raw syntax clutter in prose.',
+        'Render an inline visual diagram (SVG) directly in the chat UI. Prefer format="mermaid" unless D2 is explicitly available and beneficial. Make diagrams clean and scannable: use concise quoted labels, descriptive edge labels, 2-3 named subgraphs for boundaries, and optional pre-styled semantic classes (:::entry, :::core, :::guard, :::data, :::external) on flowchart nodes, or autonumber + activate/Note in sequenceDiagrams. Do not repeat raw syntax in prose.',
       inputSchema: z.object({
         format: z.enum(['mermaid', 'd2']).default('mermaid').describe('Diagram language ("mermaid" recommended).'),
         title: z.string().describe('Short human-readable diagram title.'),
@@ -375,16 +375,24 @@ export function createAgentTools(session: InternalSession, ctx: ToolContextCallb
 
     generate_concept_visual: tool({
       description:
-        'Generate an optional visual metaphor or mental-model illustration card when a conceptual analogy clarifies the system better than text alone (automatically falls back to a clean vector concept card if raster image generation is unavailable).',
+        'Generate an optional visual metaphor or mental-model illustration card when a conceptual analogy clarifies the system better than text alone (automatically falls back to an editorial multi-layout vector concept card if raster image generation is unavailable).',
       inputSchema: z.object({
         title: z.string().describe('Title of the mental model or architectural metaphor.'),
         metaphor: z.string().describe('Concise 1-2 sentence explanation of the metaphor.'),
         caption: z.string().optional().describe('Caption shown underneath the visual.'),
+        layout: z
+          .enum(['pipeline', 'hub', 'layers'])
+          .optional()
+          .describe('Visual composition: "pipeline" (sequential flow), "hub" (central core + collaborators), or "layers" (stacked architectural strata).'),
+        accent: z
+          .enum(['cobalt', 'emerald', 'violet', 'amber'])
+          .optional()
+          .describe('Visual accent palette: cobalt (general/core), emerald (guardrails/validation), violet (architecture/orchestration), amber (git/evolution).'),
         elements: z
           .array(
             z.object({
               label: z.string().describe('Component or concept name (2-4 words).'),
-              role: z.string().describe('Short role description (3-7 words).'),
+              role: z.string().describe('Short role description (3-8 words).'),
             })
           )
           .min(2)
@@ -392,9 +400,9 @@ export function createAgentTools(session: InternalSession, ctx: ToolContextCallb
           .optional()
           .describe('Key mapped conceptual elements for the visual.'),
       }),
-      execute: async ({ title, metaphor, caption, elements }) =>
+      execute: async ({ title, metaphor, caption, layout, accent, elements }) =>
         runTracked('generate_concept_visual', `Generated concept visual: ${title}`, title, async () => {
-          const artifact = await generateConceptVisual({ title, metaphor, caption, elements });
+          const artifact = await generateConceptVisual({ title, metaphor, caption, layout, accent, elements });
           ctx.recordVisual(artifact);
           ctx.emit({ type: 'visual', visual: artifact });
           return {

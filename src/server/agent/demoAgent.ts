@@ -320,22 +320,29 @@ async function buildCustomTopicLesson(
     setActive: true,
   });
 
-  // Render grounded Mermaid diagram showing interdependencies
-  const mermaidLines = ['flowchart LR', `  CALLER["Upstream Caller / Trigger"]`];
+  // Render grounded Mermaid diagram showing interdependencies with semantic styling
+  const mermaidLines = [
+    'flowchart LR',
+    `  CALLER["Upstream Trigger / Caller"]:::entry`,
+  ];
   if (primaryFile) {
-    mermaidLines.push(`  P["${sanitizeMermaid(primaryFile)}"]`);
-    mermaidLines.push('  CALLER --> P');
+    mermaidLines.push(`  subgraph Focus["${sanitizeMermaid(cleanTitle)} Boundary"]`);
+    mermaidLines.push(`    P["${sanitizeMermaid(primaryFile)}"]:::core`);
     if (secondaryFile) {
-      mermaidLines.push(`  S["${sanitizeMermaid(secondaryFile)}"]`);
-      mermaidLines.push('  P <--> S');
+      mermaidLines.push(`    S["${sanitizeMermaid(secondaryFile)}"]:::guard`);
+    }
+    mermaidLines.push('  end');
+    mermaidLines.push('  CALLER -->|"invokes"| P');
+    if (secondaryFile) {
+      mermaidLines.push('  P <-->|"collaborates"| S');
     }
     relatedFiles.slice(2, 4).forEach((f, idx) => {
-      mermaidLines.push(`  N${idx}["${sanitizeMermaid(f)}"]`);
-      mermaidLines.push(`  P --> N${idx}`);
+      mermaidLines.push(`  N${idx}["${sanitizeMermaid(f)}"]:::external`);
+      mermaidLines.push(`  P -->|"depends on"| N${idx}`);
     });
   } else {
-    mermaidLines.push(`  R["${sanitizeMermaid(session.repoName)}"]`);
-    mermaidLines.push('  CALLER --> R');
+    mermaidLines.push(`  R["${sanitizeMermaid(session.repoName)}"]:::core`);
+    mermaidLines.push('  CALLER -->|"enters"| R');
   }
 
   const diagram: VisualArtifact = {
@@ -441,10 +448,12 @@ async function buildReinforcementLesson(
         title: `${topicTitle} — Core Mental Model`,
         metaphor: `Picture ${topicTitle} as a three-stage relay: validate at the door, transform in the middle, hand back a clean contract.`,
         caption: 'Simplified whiteboard view showing cause-and-effect before implementation syntax.',
+        layout: 'pipeline',
+        accent: 'emerald',
         elements: [
-          { label: '1. Entry Gate', role: 'Receives raw trigger & checks rules' },
-          { label: `2. ${topicTitle.slice(0, 18)}`, role: 'Performs one focused job' },
-          { label: '3. Caller Contract', role: 'Returns predictable output' },
+          { label: 'Entry Gate', role: 'Receives raw trigger & checks rules' },
+          { label: topicTitle.slice(0, 22), role: 'Performs one focused transformation' },
+          { label: 'Caller Contract', role: 'Returns a predictable, typed output' },
         ],
       })
   );
@@ -523,10 +532,12 @@ async function buildPillarLesson(
           title: `${recon.repoName} — Why This System Exists`,
           metaphor: `Root configs define the rules of the workshop; top-level directories separate the craftsmen so each layer stays focused.`,
           caption: 'Domain boundaries inferred directly from repository root artifacts.',
+          layout: 'layers',
+          accent: 'cobalt',
           elements: [
-            { label: recon.repoName, role: recon.detectedStack.slice(0, 2).join(' · ') || 'Core domain' },
-            { label: dirs[0] ? `${dirs[0]}/` : 'Core Source', role: 'Primary runtime behavior' },
-            { label: manifests[0] ?? 'Root Config', role: 'Build, deps & contracts' },
+            { label: manifests[0] ?? 'Root Contracts', role: 'Build scripts, toolchain & dependency boundaries' },
+            { label: dirs[0] ? `${dirs[0]}/` : 'Core Source', role: 'Primary runtime architecture & domain behavior' },
+            { label: recon.repoName, role: recon.detectedStack.slice(0, 3).join(' · ') || 'Delivered product surface' },
           ],
         })
     );
@@ -634,21 +645,36 @@ async function buildPillarLesson(
       secondLevelByParent.set(parent, list);
     }
 
-    const diagramLines = ['flowchart TD', `  ROOT["${sanitizeMermaid(session.repoName)} (Root Contracts)"]`];
+    const diagramLines = [
+      'flowchart TD',
+      `  ROOT["${sanitizeMermaid(session.repoName)}\\nRoot Manifests & Contracts"]:::entry`,
+    ];
     if (topDirs.length > 0) {
+      diagramLines.push('  subgraph Modules["Top-Level Module Boundaries"]');
       topDirs.forEach((dir, idx) => {
         const nodeId = `M${idx}`;
         const children = secondLevelByParent.get(dir.name) ?? [];
-        const suffix = children.length > 0 ? `\\n${children.slice(0, 3).join(', ')}` : '';
-        diagramLines.push(`  ${nodeId}["${sanitizeMermaid(`${dir.name}/${suffix}`)}"]`);
-        diagramLines.push(`  ROOT --> ${nodeId}`);
+        const suffix = children.length > 0 ? `\\n${children.slice(0, 3).join(' · ')}` : '';
+        const roleClass = /test|spec|e2e/i.test(dir.name)
+          ? 'guard'
+          : /doc|asset|public|static/i.test(dir.name)
+            ? 'external'
+            : /data|db|store|model|schema|shared/i.test(dir.name)
+              ? 'data'
+              : 'core';
+        diagramLines.push(`    ${nodeId}["${sanitizeMermaid(`${dir.name}/${suffix}`)}"]:::${roleClass}`);
+      });
+      diagramLines.push('  end');
+      topDirs.forEach((dir, idx) => {
+        const verb = /test|spec/i.test(dir.name) ? 'verifies' : 'organizes';
+        diagramLines.push(`  ROOT -->|"${verb}"| M${idx}`);
       });
     } else {
       tree.entries
         .filter((e) => e.depth === 1)
         .slice(0, 5)
         .forEach((f, idx) => {
-          diagramLines.push(`  F${idx}["${sanitizeMermaid(f.name)}"]`);
+          diagramLines.push(`  F${idx}["${sanitizeMermaid(f.name)}"]:::core`);
           diagramLines.push(`  ROOT --> F${idx}`);
         });
     }
@@ -786,14 +812,15 @@ async function buildPillarLesson(
       caption: 'End-to-end execution lifecycle anchored to an actual inspected entry point.',
       source: [
         'sequenceDiagram',
-        '  participant Caller as External Trigger / Caller',
+        '  autonumber',
+        '  participant Caller as External Trigger',
         `  participant Entry as ${sanitizeMermaid(inspectedPath)}`,
-        '  participant Core as Delegated Collaborators',
-        '  Caller->>Entry: 1. Sends request / starts execution',
-        '  Entry->>Entry: 2. Validates boundary & prepares context',
-        '  Entry->>Core: 3. Delegates focused domain work',
-        '  Core-->>Entry: 4. Returns structured result or error',
-        '  Entry-->>Caller: 5. Emits final response / updates state',
+        '  participant Core as Delegated Modules',
+        '  Caller->>+Entry: Sends request / starts execution',
+        '  Note over Entry: Validates boundary & builds context',
+        '  Entry->>+Core: Delegates focused domain work',
+        '  Core-->>-Entry: Returns structured result or error',
+        '  Entry-->>-Caller: Emits final response & updates state',
       ].join('\n'),
     };
     callbacks.recordVisual(flowDiagram);
@@ -909,6 +936,33 @@ async function buildPillarLesson(
       ]
         .filter(Boolean)
         .join('\n');
+
+      // Render a clean visual milestone timeline from recent git history
+      const timelineCommits = recon.recentMilestones.slice(0, 5).reverse();
+      if (timelineCommits.length >= 2) {
+        const timelineLines = ['flowchart LR'];
+        timelineCommits.forEach((commit, idx) => {
+          const isLatest = idx === timelineCommits.length - 1;
+          const shortSubj =
+            commit.subject.length > 34 ? `${commit.subject.slice(0, 33)}…` : commit.subject;
+          const roleClass = isLatest ? 'entry' : idx === 0 ? 'external' : 'data';
+          timelineLines.push(
+            `  C${idx}["${sanitizeMermaid(`${commit.shortHash} · ${commit.date}\\n${shortSubj}`)}"]:::${roleClass}`
+          );
+          if (idx > 0) {
+            timelineLines.push(`  C${idx - 1} --> C${idx}`);
+          }
+        });
+        const evoVisual: VisualArtifact = {
+          id: `vis_${crypto.randomUUID().slice(0, 8)}`,
+          kind: 'mermaid',
+          title: `${recon.repoName} — Recent Git Evolution`,
+          caption: 'Chronological progression of recent repository milestones (read-only git log).',
+          source: timelineLines.join('\n'),
+        };
+        callbacks.recordVisual(evoVisual);
+        callbacks.emit({ type: 'visual', visual: evoVisual });
+      }
     }
   }
 

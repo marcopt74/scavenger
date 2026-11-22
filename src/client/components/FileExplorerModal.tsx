@@ -49,6 +49,7 @@ export function FileExplorerModal({ initialPath, onSelect, onClose }: FileExplor
   const [pathDraft, setPathDraft] = useState('');
 
   const abortRef = useRef<AbortController | null>(null);
+  const backdropMouseDownRef = useRef(false);
   const breadcrumbsRef = useRef<HTMLDivElement | null>(null);
   const pathInputRef = useRef<HTMLInputElement | null>(null);
   const filterInputRef = useRef<HTMLInputElement | null>(null);
@@ -255,7 +256,18 @@ export function FileExplorerModal({ initialPath, onSelect, onClose }: FileExplor
   const homeShortcut = data?.shortcuts.find((s) => s.kind === 'home');
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div
+      className="modal-backdrop"
+      onMouseDown={(e) => {
+        backdropMouseDownRef.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && backdropMouseDownRef.current) {
+          onClose();
+        }
+        backdropMouseDownRef.current = false;
+      }}
+    >
       <div
         className="modal-panel file-explorer-modal"
         role="dialog"

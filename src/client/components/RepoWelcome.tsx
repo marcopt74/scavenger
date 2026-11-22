@@ -100,6 +100,14 @@ export function RepoWelcome({
             <span>
               Provider: <strong>{provider.provider}</strong>
               {provider.model ? ` (${provider.model})` : ''}
+              {provider.provider === 'demo' &&
+              health &&
+              !health.configuredProviders.google &&
+              !health.configuredProviders.openai &&
+              !health.configuredProviders.anthropic &&
+              !health.configuredProviders['openai-compatible']
+                ? ' · Configure API keys'
+                : ''}
             </span>
           </button>
 

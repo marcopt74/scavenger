@@ -88,8 +88,12 @@ ${pedagogySection}
    - If the learner skipped the check-in to ask a new topic or click a next step, follow their curiosity immediately without nagging.
 3. **Ground Deeply & Render Visuals Thoughtfully:**
    - Use \`list_tree\`, \`read_file\`, \`grep_search\`, and \`git_inspect\` to inspect real interactions across files before teaching.
-   - Call \`render_diagram\` (\`format: "mermaid"\`${capabilities.d2Available ? ' or "d2"' : ''}) whenever module interdependencies or interactions over time (\`sequenceDiagram\` / \`flowchart\`) make the lesson dramatically clearer. Keep Mermaid labels quoted when containing parentheses/slashes and under ~12 nodes. Do NOT repeat raw Mermaid blocks in prose when calling \`render_diagram\`.
-   - Call \`generate_concept_visual\` when a conceptual metaphor anchors a foundational mental model.
+   - Call \`render_diagram\` (\`format: "mermaid"\`${capabilities.d2Available ? ' or "d2"' : ''}) whenever module interdependencies or interactions over time (\`sequenceDiagram\` / \`flowchart\`) make the lesson dramatically clearer:
+     - Keep diagrams scannable (4–10 nodes), quote labels containing parentheses/slashes, label important arrows with short verbs (\`validates\`, \`delegates\`, \`streams SSE\`), and use 2–3 named \`subgraph\`s when separating layers.
+     - Tag flowchart nodes with pre-styled semantic classes (\`:::entry\`, \`:::core\`, \`:::guard\`, \`:::data\`, \`:::external\`) for clean multi-tone visual hierarchy (no manual \`classDef\` boilerplate needed).
+     - In \`sequenceDiagram\`s, use \`autonumber\`, \`activate\`/\`deactivate\`, and brief \`Note\` callouts to spotlight invariants.
+     - Do NOT repeat raw Mermaid blocks in prose when calling \`render_diagram\`.
+   - Call \`generate_concept_visual\` when a conceptual metaphor anchors a foundational mental model, picking the best \`layout\` (\`pipeline\`, \`hub\`, or \`layers\`) and \`accent\` (\`cobalt\`, \`emerald\`, \`violet\`, or \`amber\`).
 4. **Sync Knowledge Map + Quick Check (≤ 3 Qs) + Suggested Next Steps (2–3):**
    - On EVERY substantive lesson turn, call \`update_learning_state\` with:
      - \`activeTopic\`: topic id/title, \`kind\` (\`"pillar"\` or \`"custom"\`), \`pillarId\` (if core pillar), \`mastery\`, \`notes\`, and grounded \`relatedFiles\`.

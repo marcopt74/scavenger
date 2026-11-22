@@ -42,6 +42,7 @@ export function App() {
         setProvider({
           provider: info.defaultProvider,
           model: info.defaultModel,
+          baseUrl: info.defaultBaseUrl,
         });
       })
       .catch(() => {
@@ -183,7 +184,8 @@ export function App() {
     }
   }
 
-  async function handleSaveProvider(next: ProviderSelection) {
+  async function handleSettingsSaved(next: ProviderSelection, nextHealth: HealthInfo) {
+    setHealth(nextHealth);
     setProvider(next);
     if (session) {
       try {
@@ -256,7 +258,7 @@ export function App() {
         <SettingsModal
           health={health}
           provider={provider}
-          onSave={handleSaveProvider}
+          onSaved={handleSettingsSaved}
           onClose={() => setSettingsOpen(false)}
         />
       )}
