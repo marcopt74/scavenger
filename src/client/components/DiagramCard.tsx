@@ -8,6 +8,8 @@ import {
   renderMermaidSvg,
 } from '../utils/mermaidTheme';
 import type { MermaidLook } from '../utils/mermaidTheme';
+import { getDocumentTheme, THEME_CHANGE_EVENT } from '../utils/theme';
+import type { ThemeMode } from '../utils/theme';
 import { VisualLightbox } from './VisualLightbox';
 
 export interface DiagramCardProps {
@@ -28,11 +30,21 @@ export function DiagramCard({
   preRenderError,
 }: DiagramCardProps) {
   const [look, setLook] = useState<MermaidLook>('classic');
+  const [theme, setTheme] = useState<ThemeMode>(() => getDocumentTheme());
   const [svg, setSvg] = useState<string | null>(preRenderedSvg ?? null);
   const [error, setError] = useState<string | null>(preRenderError ?? null);
   const [loading, setLoading] = useState<boolean>(!preRenderedSvg && !preRenderError);
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    function handleThemeChange(e: Event) {
+      const custom = e as CustomEvent<ThemeMode>;
+      setTheme(custom.detail ?? getDocumentTheme());
+    }
+    window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange);
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange);
+  }, []);
 
   useEffect(() => {
     if (format === 'd2' && (preRenderedSvg || preRenderError)) {
@@ -49,7 +61,7 @@ export function DiagramCard({
     async function render() {
       try {
         if (format === 'mermaid') {
-          const renderedSvg = await renderMermaidSvg(source, look);
+          const renderedSvg = await renderMermaidSvg(source, look, theme);
           if (!cancelled) {
             setSvg(renderedSvg);
             setLoading(false);
@@ -77,7 +89,7 @@ export function DiagramCard({
     return () => {
       cancelled = true;
     };
-  }, [format, source, look, preRenderedSvg, preRenderError]);
+  }, [format, source, look, theme, preRenderedSvg, preRenderError]);
 
   async function handleCopySource() {
     try {

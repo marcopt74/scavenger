@@ -29,6 +29,8 @@ import type {
 } from '../../shared/types';
 import { FileExplorerModal } from './FileExplorerModal';
 import { formatRelativeTime } from './SessionsProgressModal';
+import { ThemeToggleButton } from './ThemeToggleButton';
+import type { ThemeMode } from '../utils/theme';
 
 export interface ScanProgressState {
   phase: ScanPhase;
@@ -52,6 +54,8 @@ interface RepoWelcomeProps {
   onDeleteSession?: (sessionId: string) => void;
   onOpenProgressModal?: () => void;
   onOpenSettings: () => void;
+  theme?: ThemeMode;
+  onToggleTheme?: () => void;
 }
 
 const MASTERY_LABELS: Record<TopicMastery, string> = {
@@ -83,6 +87,8 @@ export function RepoWelcome({
   onDeleteSession,
   onOpenProgressModal,
   onOpenSettings,
+  theme = 'light',
+  onToggleTheme,
 }: RepoWelcomeProps) {
   const [repoPath, setRepoPath] = useState('');
   const [explorerOpen, setExplorerOpen] = useState(false);
@@ -97,6 +103,11 @@ export function RepoWelcome({
   if (restoringSession) {
     return (
       <div className="welcome-container">
+        {onToggleTheme && (
+          <div className="welcome-top-actions">
+            <ThemeToggleButton theme={theme} onToggle={onToggleTheme} />
+          </div>
+        )}
         <div className="welcome-inner">
           <div className="scan-progress-card" role="status" aria-live="polite">
             <div className="scan-progress-header">
@@ -118,6 +129,11 @@ export function RepoWelcome({
 
   return (
     <div className="welcome-container">
+      {onToggleTheme && (
+        <div className="welcome-top-actions">
+          <ThemeToggleButton theme={theme} onToggle={onToggleTheme} />
+        </div>
+      )}
       <div className="welcome-inner">
         <div className="welcome-badge">
           <Sparkles size={14} />

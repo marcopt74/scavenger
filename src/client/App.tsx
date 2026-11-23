@@ -30,6 +30,13 @@ import type { ScanProgressState } from './components/RepoWelcome';
 import { SessionsProgressModal } from './components/SessionsProgressModal';
 import { SettingsModal } from './components/SettingsModal';
 import { StageProgressBar } from './components/StageProgressBar';
+import {
+  applyDocumentTheme,
+  readStoredTheme,
+  toggleThemeMode,
+  writeStoredTheme,
+} from './utils/theme';
+import type { ThemeMode } from './utils/theme';
 
 const ACTIVE_SESSION_STORAGE_KEY = 'scavenger.activeSessionId';
 
@@ -62,6 +69,7 @@ function writeStoredSessionId(sessionId: string | null): void {
 }
 
 export function App() {
+  const [theme, setTheme] = useState<ThemeMode>(() => readStoredTheme());
   const [health, setHealth] = useState<HealthInfo | null>(null);
   const [provider, setProvider] = useState<ProviderSelection>({
     provider: 'demo',
@@ -85,6 +93,15 @@ export function App() {
   const [knowledgeToast, setKnowledgeToast] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [progressModalOpen, setProgressModalOpen] = useState(false);
+
+  useEffect(() => {
+    applyDocumentTheme(theme);
+    writeStoredTheme(theme);
+  }, [theme]);
+
+  const handleToggleTheme = useCallback(() => {
+    setTheme((prev) => toggleThemeMode(prev));
+  }, []);
 
   const refreshSessionsCatalog = useCallback(async () => {
     try {
@@ -430,6 +447,8 @@ export function App() {
           onDeleteSession={(sessionId) => void handleDeleteSession(sessionId)}
           onOpenProgressModal={() => setProgressModalOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
+          theme={theme}
+          onToggleTheme={handleToggleTheme}
         />
       ) : (
         <>
@@ -449,6 +468,8 @@ export function App() {
               setProgressModalOpen(true);
             }}
             onOpenSettings={() => setSettingsOpen(true)}
+            theme={theme}
+            onToggleTheme={handleToggleTheme}
             onResetSession={() => {
               setSession(null);
               writeStoredSessionId(null);

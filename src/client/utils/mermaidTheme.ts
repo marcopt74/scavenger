@@ -1,5 +1,7 @@
 import mermaid from 'mermaid';
 import type { MermaidConfig } from 'mermaid';
+import { getDocumentTheme } from './theme';
+import type { ThemeMode } from './theme';
 
 export type MermaidLook = 'classic' | 'handDrawn';
 
@@ -9,6 +11,14 @@ const SEMANTIC_CLASS_DEFS: Record<string, string> = {
   guard: 'classDef guard fill:#F0FDFA,stroke:#0D9488,stroke-width:1.75px,color:#115E59',
   data: 'classDef data fill:#FFFBEB,stroke:#D97706,stroke-width:1.75px,color:#78350F',
   external: 'classDef external fill:#F8FAFC,stroke:#64748B,stroke-width:1.5px,color:#334155',
+};
+
+const SEMANTIC_DARK_CLASS_DEFS: Record<string, string> = {
+  entry: 'classDef entry fill:#1E3A8A,stroke:#60A5FA,stroke-width:1.75px,color:#EFF6FF',
+  core: 'classDef core fill:#312E81,stroke:#818CF8,stroke-width:1.75px,color:#EEF2FF',
+  guard: 'classDef guard fill:#134E4A,stroke:#2DD4BF,stroke-width:1.75px,color:#F0FDFA',
+  data: 'classDef data fill:#78350F,stroke:#FBBF24,stroke-width:1.75px,color:#FFFBEB',
+  external: 'classDef external fill:#1E293B,stroke:#94A3B8,stroke-width:1.5px,color:#E2E8F0',
 };
 
 const EDITORIAL_THEME_CSS = `
@@ -120,7 +130,184 @@ const EDITORIAL_THEME_CSS = `
   }
 `;
 
-function getMermaidConfig(look: MermaidLook): MermaidConfig {
+const EDITORIAL_DARK_THEME_CSS = `
+  svg,
+  text,
+  tspan,
+  .label,
+  .nodeLabel,
+  .edgeLabel,
+  .cluster-label,
+  .messageText,
+  .noteText {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    text-rendering: geometricPrecision !important;
+    -webkit-font-smoothing: antialiased !important;
+    -moz-osx-font-smoothing: grayscale !important;
+    font-feature-settings: 'cv02' 1, 'cv03' 1, 'cv04' 1, 'cv05' 1, 'cv08' 1, 'cv11' 1, 'ss01' 1, 'calt' 1, 'liga' 1, 'kern' 1 !important;
+    font-kerning: normal !important;
+  }
+  .node .label text,
+  .nodeLabel {
+    fill: #F1F5F9 !important;
+    color: #F1F5F9 !important;
+    font-weight: 540 !important;
+    letter-spacing: -0.01em !important;
+  }
+  .node rect,
+  .node polygon,
+  .node circle {
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.36));
+  }
+  .node rect {
+    rx: 10px;
+    ry: 10px;
+  }
+  .cluster rect {
+    rx: 14px !important;
+    ry: 14px !important;
+    fill: rgba(22, 29, 39, 0.88) !important;
+    stroke: #36455C !important;
+    stroke-width: 1.35px !important;
+    stroke-dasharray: 5 4 !important;
+  }
+  .cluster-label text,
+  .cluster-label span {
+    fill: #94A3B8 !important;
+    color: #94A3B8 !important;
+    font-weight: 600 !important;
+    font-size: 12px !important;
+  }
+  .edgePath .path {
+    stroke: #94A3B8 !important;
+    stroke-width: 1.7px !important;
+  }
+  .edgeLabel rect {
+    rx: 6px;
+    ry: 6px;
+    fill: #161D27 !important;
+    stroke: #36455C !important;
+    stroke-width: 1px !important;
+    opacity: 0.96 !important;
+  }
+  .edgeLabel text,
+  .edgeLabel span {
+    fill: #CBD5E1 !important;
+    color: #CBD5E1 !important;
+    font-size: 11.5px !important;
+    font-weight: 500 !important;
+  }
+  .actor {
+    rx: 10px !important;
+    ry: 10px !important;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.36));
+  }
+  text.actor > tspan {
+    font-weight: 600 !important;
+  }
+  .actor-line {
+    stroke: #475569 !important;
+    stroke-dasharray: 4 4 !important;
+  }
+  .messageLine0,
+  .messageLine1 {
+    stroke: #94A3B8 !important;
+    stroke-width: 1.6px !important;
+  }
+  .messageText {
+    fill: #E2E8F0 !important;
+    font-size: 12.5px !important;
+    font-weight: 500 !important;
+  }
+  .note {
+    rx: 8px !important;
+    ry: 8px !important;
+    fill: #422006 !important;
+    stroke: #D97706 !important;
+    stroke-width: 1.25px !important;
+  }
+  .noteText,
+  .noteText > tspan {
+    fill: #FDE68A !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+  }
+  .sequenceNumber {
+    fill: #0F141C !important;
+    font-weight: 700 !important;
+  }
+`;
+
+function getMermaidConfig(look: MermaidLook, theme: ThemeMode = 'light'): MermaidConfig {
+  if (theme === 'dark') {
+    return {
+      startOnLoad: false,
+      securityLevel: 'strict',
+      theme: 'base',
+      look,
+      handDrawnSeed: 7,
+      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      flowchart: {
+        curve: 'basis',
+        padding: 18,
+        nodeSpacing: 48,
+        rankSpacing: 58,
+        htmlLabels: false,
+        useMaxWidth: true,
+      },
+      sequence: {
+        mirrorActors: false,
+        actorMargin: 56,
+        messageMargin: 44,
+        boxMargin: 12,
+        noteMargin: 14,
+        useMaxWidth: true,
+      },
+      themeVariables: {
+        background: '#111722',
+        primaryColor: '#1E293B',
+        primaryTextColor: '#F1F5F9',
+        primaryBorderColor: '#60A5FA',
+        secondaryColor: '#161D27',
+        secondaryTextColor: '#E2E8F0',
+        secondaryBorderColor: '#475569',
+        tertiaryColor: '#134E4A',
+        tertiaryTextColor: '#CCFBF1',
+        tertiaryBorderColor: '#2DD4BF',
+        lineColor: '#94A3B8',
+        textColor: '#E2E8F0',
+        mainBkg: '#1E293B',
+        nodeBorder: '#60A5FA',
+        clusterBkg: '#161D27',
+        clusterBorder: '#36455C',
+        defaultLinkColor: '#94A3B8',
+        titleColor: '#F1F5F9',
+        edgeLabelBackground: '#161D27',
+        actorBkg: '#1E293B',
+        actorBorder: '#60A5FA',
+        actorTextColor: '#EFF6FF',
+        actorLineColor: '#475569',
+        signalColor: '#94A3B8',
+        signalTextColor: '#E2E8F0',
+        labelBoxBkgColor: '#161D27',
+        labelBoxBorderColor: '#36455C',
+        labelTextColor: '#CBD5E1',
+        activationBkgColor: '#1E3A8A',
+        activationBorderColor: '#60A5FA',
+        noteBkgColor: '#422006',
+        noteBorderColor: '#D97706',
+        noteTextColor: '#FDE68A',
+        cScale0: '#1E3A8A',
+        cScale1: '#312E81',
+        cScale2: '#134E4A',
+        cScale3: '#78350F',
+        cScale4: '#1E293B',
+        fontSize: '13.5px',
+      },
+      themeCSS: EDITORIAL_DARK_THEME_CSS,
+    };
+  }
+
   return {
     startOnLoad: false,
     securityLevel: 'strict',
@@ -195,15 +382,16 @@ function getMermaidConfig(look: MermaidLook): MermaidConfig {
  * on flowchart/graph diagrams when not already declared. Works seamlessly in both
  * `classic` and `handDrawn` (RoughJS) looks as well as exported SVGs/PNGs.
  */
-function enrichFlowchartSemantics(source: string): string {
+function enrichFlowchartSemantics(source: string, theme: ThemeMode = 'light'): string {
   const trimmed = source.trim();
   const strippedDirectives = trimmed.replace(/^%%\{[\s\S]*?\}%%\s*/, '').trimStart();
   if (!/^(flowchart|graph)\b/i.test(strippedDirectives)) {
     return trimmed;
   }
 
+  const defs = theme === 'dark' ? SEMANTIC_DARK_CLASS_DEFS : SEMANTIC_CLASS_DEFS;
   const additions: string[] = [];
-  for (const [name, def] of Object.entries(SEMANTIC_CLASS_DEFS)) {
+  for (const [name, def] of Object.entries(defs)) {
     const isReferenced =
       new RegExp(`:::${name}\\b`).test(trimmed) ||
       new RegExp(`^\\s*class\\s+[^\\n]+\\s+${name}\\b`, 'm').test(trimmed);
@@ -225,11 +413,12 @@ let renderSeq = 0;
 
 export function renderMermaidSvg(
   source: string,
-  look: MermaidLook = 'classic'
+  look: MermaidLook = 'classic',
+  theme: ThemeMode = getDocumentTheme()
 ): Promise<string> {
   const run = async (): Promise<string> => {
-    mermaid.initialize(getMermaidConfig(look));
-    const prepared = enrichFlowchartSemantics(source);
+    mermaid.initialize(getMermaidConfig(look, theme));
+    const prepared = enrichFlowchartSemantics(source, theme);
     const id = `mmd_scav_${++renderSeq}_${Date.now()}`;
     const { svg } = await mermaid.render(id, prepared);
     return svg;
@@ -449,7 +638,7 @@ export async function downloadSvgAsPng(
     }
 
     ctx.scale(scale, scale);
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = getDocumentTheme() === 'dark' ? '#111722' : '#FFFFFF';
     ctx.fillRect(0, 0, width + pad * 2, height + pad * 2);
     ctx.drawImage(img, pad, pad, width, height);
 

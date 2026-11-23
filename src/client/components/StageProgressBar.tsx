@@ -20,6 +20,8 @@ import type {
   TopicMastery,
   UserLevel,
 } from '../../shared/types';
+import type { ThemeMode } from '../utils/theme';
+import { ThemeToggleButton } from './ThemeToggleButton';
 
 interface StageProgressBarProps {
   session: SessionPublicState;
@@ -34,6 +36,8 @@ interface StageProgressBarProps {
   onChangeLevel: (level: UserLevel) => void;
   onOpenProgressModal?: () => void;
   onOpenSettings: () => void;
+  theme?: ThemeMode;
+  onToggleTheme?: () => void;
   onResetSession: () => void;
 }
 
@@ -75,6 +79,8 @@ export function StageProgressBar({
   onChangeLevel,
   onOpenProgressModal,
   onOpenSettings,
+  theme = 'light',
+  onToggleTheme,
   onResetSession,
 }: StageProgressBarProps) {
   const [levelOpen, setLevelOpen] = useState(false);
@@ -361,6 +367,10 @@ export function StageProgressBar({
             </div>
           )}
         </div>
+
+        {onToggleTheme && (
+          <ThemeToggleButton theme={theme} onToggle={onToggleTheme} />
+        )}
 
         <button
           type="button"
