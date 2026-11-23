@@ -346,6 +346,9 @@ export function App() {
             observedFilesCount={session.observedFilesCount}
             observedCommitsCount={session.observedCommitsCount}
             disabled={isStreaming}
+            streamingText={streamingText}
+            streamingActivities={streamingActivities}
+            streamingVisuals={streamingVisuals}
             onSend={(prompt) => void handleSend(prompt)}
           />
         </>

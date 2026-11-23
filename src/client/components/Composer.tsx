@@ -1,6 +1,83 @@
-import { ArrowUp } from 'lucide-react';
-import { useRef, useState } from 'react';
-import type { DiagnosticProfile, ProviderSelection } from '../../shared/types';
+import { ArrowUp, Loader2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import type {
+  DiagnosticProfile,
+  ProviderSelection,
+  ToolActivity,
+  VisualArtifact,
+} from '../../shared/types';
+
+export interface ComposerProgressCue {
+  phaseLabel: string;
+  message: string;
+  stepCount: number;
+}
+
+export function deriveComposerProgressCue(options: {
+  activeTopicTitle: string;
+  streamingText?: string;
+  streamingActivities?: ToolActivity[];
+  streamingVisuals?: VisualArtifact[];
+}): ComposerProgressCue {
+  const activities = options.streamingActivities ?? [];
+  const visuals = options.streamingVisuals ?? [];
+  const text = options.streamingText ?? '';
+  const runningActivity = [...activities].reverse().find((a) => a.status === 'running');
+  const stepCount = activities.length + visuals.length;
+
+  if (runningActivity) {
+    let phaseLabel = 'Working';
+    if (['read_file', 'list_tree', 'grep_search'].includes(runningActivity.toolName)) {
+      phaseLabel = 'Inspecting repo';
+    } else if (runningActivity.toolName === 'git_inspect') {
+      phaseLabel = 'Checking git';
+    } else if (
+      ['render_mermaid', 'render_d2', 'generate_concept_visual'].includes(runningActivity.toolName)
+    ) {
+      phaseLabel = 'Rendering visual';
+    } else if (runningActivity.toolName === 'refresh_knowledge_map') {
+      phaseLabel = 'Refreshing map';
+    }
+    return {
+      phaseLabel,
+      message: runningActivity.summary || 'Inspecting repository…',
+      stepCount,
+    };
+  }
+
+  if (text.trim().length > 0) {
+    return {
+      phaseLabel: 'Generating',
+      message: options.activeTopicTitle
+        ? `Generating response · ${options.activeTopicTitle}…`
+        : 'Generating response…',
+      stepCount,
+    };
+  }
+
+  if (stepCount > 0) {
+    const parts: string[] = [];
+    if (activities.length > 0) {
+      parts.push(`${activities.length} tool step${activities.length === 1 ? '' : 's'}`);
+    }
+    if (visuals.length > 0) {
+      parts.push(`${visuals.length} visual${visuals.length === 1 ? '' : 's'}`);
+    }
+    return {
+      phaseLabel: 'Synthesizing',
+      message: `Waiting for model response (${parts.join(' · ')} completed)…`,
+      stepCount,
+    };
+  }
+
+  return {
+    phaseLabel: 'Thinking',
+    message: options.activeTopicTitle
+      ? `Waiting for model response · ${options.activeTopicTitle}…`
+      : 'Waiting for model response…',
+    stepCount: 0,
+  };
+}
 
 interface ComposerProps {
   diagnostic: DiagnosticProfile;
@@ -10,6 +87,9 @@ interface ComposerProps {
   observedFilesCount: number;
   observedCommitsCount: number;
   disabled: boolean;
+  streamingText?: string;
+  streamingActivities?: ToolActivity[];
+  streamingVisuals?: VisualArtifact[];
   onSend: (text: string) => void;
 }
 
@@ -21,10 +101,29 @@ export function Composer({
   observedFilesCount,
   observedCommitsCount,
   disabled,
+  streamingText,
+  streamingActivities,
+  streamingVisuals,
   onSend,
 }: ComposerProps) {
   const [text, setText] = useState('');
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!disabled) {
+      setElapsedSeconds(0);
+      return;
+    }
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+    const start = Date.now();
+    const timer = window.setInterval(() => {
+      setElapsedSeconds(Math.max(1, Math.floor((Date.now() - start) / 1000)));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [disabled]);
 
   function submit() {
     const trimmed = text.trim();
@@ -80,11 +179,22 @@ export function Composer({
         { label: 'Go deeper', prompt: 'Go deeper on the internals, code contracts, and trade-offs.' },
       ];
 
-  const placeholder = !diagnostic.completed
+  const idlePlaceholder = !diagnostic.completed
     ? 'Answer the quick calibration — or tell me any topic you want to learn right away…'
     : hasPendingCheckIn
       ? 'Answer the quick check above, click a next step, or ask to learn any topic…'
       : 'Ask to learn any topic, module, or file — or pick a suggested step above…';
+
+  const progressCue = disabled
+    ? deriveComposerProgressCue({
+        activeTopicTitle,
+        streamingText,
+        streamingActivities,
+        streamingVisuals,
+      })
+    : null;
+
+  const placeholder = progressCue ? progressCue.message : idlePlaceholder;
 
   return (
     <div className="composer-dock">
@@ -103,25 +213,58 @@ export function Composer({
           ))}
         </div>
 
-        <div className="composer-box">
+        <div className={`composer-box${disabled ? ' is-working' : ''}`} aria-busy={disabled}>
+          {disabled && (
+            <div
+              className="composer-progress-track"
+              role="progressbar"
+              aria-label="Waiting for model response"
+            >
+              <div className="composer-progress-bar" />
+            </div>
+          )}
+
+          {disabled && (
+            <div className="composer-working-dots" aria-hidden="true">
+              <span className="composer-working-dot" />
+              <span className="composer-working-dot" />
+              <span className="composer-working-dot" />
+            </div>
+          )}
+
           <textarea
             ref={textareaRef}
             className="composer-textarea"
             rows={1}
-            value={text}
+            value={disabled ? '' : text}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
             disabled={disabled}
             placeholder={placeholder}
           />
+
+          {disabled && progressCue && (
+            <div className="composer-working-status" role="status" aria-live="polite">
+              <span className="composer-phase-badge">{progressCue.phaseLabel}</span>
+              {progressCue.stepCount > 0 && (
+                <span className="composer-step-count">
+                  {progressCue.stepCount} {progressCue.stepCount === 1 ? 'step' : 'steps'}
+                </span>
+              )}
+              {elapsedSeconds > 0 && (
+                <span className="composer-elapsed">{elapsedSeconds}s</span>
+              )}
+            </div>
+          )}
+
           <button
             type="button"
-            className="send-btn"
+            className={`send-btn${disabled ? ' is-working' : ''}`}
             onClick={submit}
             disabled={disabled || !text.trim()}
-            aria-label="Send message"
+            aria-label={disabled ? 'Waiting for model response' : 'Send message'}
           >
-            <ArrowUp size={18} />
+            {disabled ? <Loader2 size={18} className="spin-icon" /> : <ArrowUp size={18} />}
           </button>
         </div>
 
