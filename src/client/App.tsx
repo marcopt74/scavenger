@@ -1,18 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type {
   ChatMessage,
   CorePillarId,
   HealthInfo,
   LearningTopic,
   ProviderSelection,
+  RepoProgressSummary,
   SessionPublicState,
+  SessionSummary,
   ToolActivity,
   UserLevel,
   VisualArtifact,
 } from '../shared/types';
 import {
   checkSessionKnowledgeStatus,
+  deleteSessionById,
   fetchHealth,
+  fetchSession,
+  fetchSessionsList,
   patchSession,
   refreshSessionKnowledge,
   streamChatTurn,
@@ -22,8 +27,39 @@ import { ChatMessageList } from './components/ChatMessageList';
 import { Composer } from './components/Composer';
 import { RepoWelcome } from './components/RepoWelcome';
 import type { ScanProgressState } from './components/RepoWelcome';
+import { SessionsProgressModal } from './components/SessionsProgressModal';
 import { SettingsModal } from './components/SettingsModal';
 import { StageProgressBar } from './components/StageProgressBar';
+
+const ACTIVE_SESSION_STORAGE_KEY = 'scavenger.activeSessionId';
+
+function readStoredSessionId(): string | null {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get('session')?.trim();
+    if (fromUrl) return fromUrl;
+    const fromStorage = window.localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY)?.trim();
+    return fromStorage || null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredSessionId(sessionId: string | null): void {
+  try {
+    const url = new URL(window.location.href);
+    if (sessionId) {
+      window.localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, sessionId);
+      url.searchParams.set('session', sessionId);
+    } else {
+      window.localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
+      url.searchParams.delete('session');
+    }
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+  } catch {
+    // Ignore storage/history errors in restricted environments
+  }
+}
 
 export function App() {
   const [health, setHealth] = useState<HealthInfo | null>(null);
@@ -32,6 +68,9 @@ export function App() {
     model: 'local-grounded-demo',
   });
   const [session, setSession] = useState<SessionPublicState | null>(null);
+  const [restoringSession, setRestoringSession] = useState<boolean>(() => Boolean(readStoredSessionId()));
+  const [sessionsList, setSessionsList] = useState<SessionSummary[]>([]);
+  const [repoProgressList, setRepoProgressList] = useState<RepoProgressSummary[]>([]);
   const [initializing, setInitializing] = useState(false);
   const [scanProgress, setScanProgress] = useState<ScanProgressState | null>(null);
   const [initError, setInitError] = useState<string | null>(null);
@@ -45,21 +84,72 @@ export function App() {
   const [refreshingKnowledge, setRefreshingKnowledge] = useState(false);
   const [knowledgeToast, setKnowledgeToast] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [progressModalOpen, setProgressModalOpen] = useState(false);
+
+  const refreshSessionsCatalog = useCallback(async () => {
+    try {
+      const res = await fetchSessionsList();
+      setSessionsList(res.sessions);
+      setRepoProgressList(res.repoProgress);
+    } catch {
+      // Ignore background catalog refresh errors
+    }
+  }, []);
 
   useEffect(() => {
     fetchHealth()
       .then((info) => {
         setHealth(info);
-        setProvider({
-          provider: info.defaultProvider,
-          model: info.defaultModel,
-          baseUrl: info.defaultBaseUrl,
-        });
+        setProvider((prev) =>
+          session
+            ? prev
+            : {
+                provider: info.defaultProvider,
+                model: info.defaultModel,
+                baseUrl: info.defaultBaseUrl,
+              }
+        );
       })
       .catch(() => {
         // Server may still be starting during dev
       });
+
+    void refreshSessionsCatalog();
+
+    const savedSessionId = readStoredSessionId();
+    if (savedSessionId) {
+      setRestoringSession(true);
+      fetchSession(savedSessionId)
+        .then((restored) => {
+          setSession(restored);
+          setProvider(restored.provider);
+          writeStoredSessionId(restored.id);
+        })
+        .catch(() => {
+          writeStoredSessionId(null);
+        })
+        .finally(() => {
+          setRestoringSession(false);
+        });
+    }
+    // Run once on initial mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const onPopState = () => {
+      const targetId = readStoredSessionId();
+      if (!targetId) {
+        setSession(null);
+        return;
+      }
+      if (targetId !== session?.id) {
+        void handleResumeSession(targetId);
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  });
 
   // Automatically check if git pull updated local repo HEAD on window focus or periodic poll
   useEffect(() => {
@@ -99,7 +189,7 @@ export function App() {
     return () => window.clearTimeout(timer);
   }, [knowledgeToast]);
 
-  async function handleStartSession(repoPath: string) {
+  async function handleStartSession(repoPath: string, options?: { startFresh?: boolean }) {
     setInitializing(true);
     setInitError(null);
     setChatError(null);
@@ -122,14 +212,48 @@ export function App() {
             });
           }
         },
-        provider
+        provider,
+        options
       );
       setSession(created);
+      writeStoredSessionId(created.id);
+      void refreshSessionsCatalog();
     } catch (err) {
       setInitError(err instanceof Error ? err.message : 'Failed to open repository.');
     } finally {
       setInitializing(false);
       setScanProgress(null);
+    }
+  }
+
+  async function handleResumeSession(sessionId: string) {
+    setInitError(null);
+    setChatError(null);
+    setRestoringSession(true);
+    try {
+      const loaded = await fetchSession(sessionId);
+      setSession(loaded);
+      setProvider(loaded.provider);
+      writeStoredSessionId(loaded.id);
+      void refreshSessionsCatalog();
+    } catch (err) {
+      setInitError(err instanceof Error ? err.message : 'Failed to resume session.');
+    } finally {
+      setRestoringSession(false);
+    }
+  }
+
+  async function handleDeleteSession(sessionId: string) {
+    try {
+      const res = await deleteSessionById(sessionId);
+      setSessionsList(res.sessions);
+      setRepoProgressList(res.repoProgress);
+      if (session?.id === sessionId) {
+        setSession(null);
+        writeStoredSessionId(null);
+      }
+    } catch (err) {
+      setInitError(err instanceof Error ? err.message : 'Failed to delete session.');
     }
   }
 
@@ -245,6 +369,7 @@ export function App() {
       setStreamingText('');
       setStreamingActivities([]);
       setStreamingVisuals([]);
+      void refreshSessionsCatalog();
     }
   }
 
@@ -265,6 +390,7 @@ export function App() {
     try {
       const updated = await patchSession(session.id, { inferredLevel: level });
       setSession(updated);
+      void refreshSessionsCatalog();
     } catch (err) {
       setChatError(err instanceof Error ? err.message : 'Failed to update depth calibration.');
     }
@@ -283,6 +409,10 @@ export function App() {
     }
   }
 
+  const currentRepoProgress = session
+    ? repoProgressList.find((r) => r.repoPath === session.repoPath)
+    : undefined;
+
   return (
     <div className="app-shell">
       {!session ? (
@@ -290,9 +420,15 @@ export function App() {
           health={health}
           provider={provider}
           loading={initializing}
+          restoringSession={restoringSession}
           scanProgress={scanProgress}
           error={initError}
-          onStartSession={handleStartSession}
+          sessions={sessionsList}
+          repoProgress={repoProgressList}
+          onStartSession={(repoPath, options) => void handleStartSession(repoPath, options)}
+          onResumeSession={(sessionId) => void handleResumeSession(sessionId)}
+          onDeleteSession={(sessionId) => void handleDeleteSession(sessionId)}
+          onOpenProgressModal={() => setProgressModalOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
         />
       ) : (
@@ -301,16 +437,24 @@ export function App() {
             session={session}
             disabled={isStreaming}
             refreshingKnowledge={refreshingKnowledge}
+            currentRepoProgress={currentRepoProgress}
+            totalSessionsCount={sessionsList.length}
             onSelectPillar={handleSelectPillar}
             onSelectTopic={handleSelectTopic}
             onSelectModule={(modId) => void handleSend(`Teach me how the \`${modId}\` module works and how it connects to the rest of the repo.`)}
             onRefreshKnowledge={() => void handleRefreshKnowledge('full')}
             onChangeLevel={handleChangeLevel}
+            onOpenProgressModal={() => {
+              void refreshSessionsCatalog();
+              setProgressModalOpen(true);
+            }}
             onOpenSettings={() => setSettingsOpen(true)}
             onResetSession={() => {
               setSession(null);
+              writeStoredSessionId(null);
               setChatError(null);
               setKnowledgeToast(null);
+              void refreshSessionsCatalog();
             }}
           />
 
@@ -360,6 +504,20 @@ export function App() {
           provider={provider}
           onSaved={handleSettingsSaved}
           onClose={() => setSettingsOpen(false)}
+        />
+      )}
+
+      {progressModalOpen && (
+        <SessionsProgressModal
+          activeSessionId={session?.id}
+          activeRepoPath={session?.repoPath}
+          sessions={sessionsList}
+          repoProgress={repoProgressList}
+          loading={initializing || restoringSession}
+          onResumeSession={(sessionId) => void handleResumeSession(sessionId)}
+          onStartRepoSession={(repoPath, options) => void handleStartSession(repoPath, options)}
+          onDeleteSession={(sessionId) => void handleDeleteSession(sessionId)}
+          onClose={() => setProgressModalOpen(false)}
         />
       )}
     </div>

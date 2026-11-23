@@ -13,7 +13,7 @@ import { resolveLanguageModel } from '../config.js';
 import { getRepoGitState } from '../knowledge/gitWatcher.js';
 import { scanOrRefreshRepoKnowledge } from '../knowledge/scannerAgent.js';
 import { cloneLearningState } from '../session/learningEngine.js';
-import { updateSessionKnowledge } from '../session/sessionStore.js';
+import { saveSession, updateSessionKnowledge } from '../session/sessionStore.js';
 import type { InternalSession } from '../session/sessionStore.js';
 import { detectRecalibrationSignal } from '../session/stageMachine.js';
 import { createAgentTools } from '../tools/agentTools.js';
@@ -156,6 +156,7 @@ export async function runOnboardingTurn(
 
   session.messages.push(assistantMessage);
   session.updatedAt = new Date().toISOString();
+  saveSession(session);
 
   emit({
     type: 'session-state',

@@ -1,4 +1,5 @@
 import {
+  Activity,
   Check,
   ChevronDown,
   Database,
@@ -14,6 +15,7 @@ import { ONBOARDING_STAGES } from '../../shared/types';
 import type {
   CorePillarId,
   LearningTopic,
+  RepoProgressSummary,
   SessionPublicState,
   TopicMastery,
   UserLevel,
@@ -23,11 +25,14 @@ interface StageProgressBarProps {
   session: SessionPublicState;
   disabled: boolean;
   refreshingKnowledge?: boolean;
+  currentRepoProgress?: RepoProgressSummary;
+  totalSessionsCount?: number;
   onSelectPillar: (pillarId: CorePillarId, title: string) => void;
   onSelectTopic: (topic: LearningTopic) => void;
   onSelectModule?: (moduleId: string) => void;
   onRefreshKnowledge?: () => void;
   onChangeLevel: (level: UserLevel) => void;
+  onOpenProgressModal?: () => void;
   onOpenSettings: () => void;
   onResetSession: () => void;
 }
@@ -61,11 +66,14 @@ export function StageProgressBar({
   session,
   disabled,
   refreshingKnowledge = false,
+  currentRepoProgress,
+  totalSessionsCount = 1,
   onSelectPillar,
   onSelectTopic,
   onSelectModule,
   onRefreshKnowledge,
   onChangeLevel,
+  onOpenProgressModal,
   onOpenSettings,
   onResetSession,
 }: StageProgressBarProps) {
@@ -303,6 +311,21 @@ export function StageProgressBar({
             </div>
           )}
         </div>
+
+        {onOpenProgressModal && (
+          <button
+            type="button"
+            className="chip-button"
+            onClick={onOpenProgressModal}
+            title="Monitor progress across sessions, switch sessions, or resume previous onboarding"
+          >
+            <Activity size={13} />
+            <span>
+              Progress · {currentRepoProgress ? `${currentRepoProgress.progressPercent}%` : `${exploredCount}/${learning.topics.length}`}
+              {totalSessionsCount > 1 ? ` (${totalSessionsCount})` : ''}
+            </span>
+          </button>
+        )}
 
         <div className="level-menu-wrap" ref={levelRef}>
           <button

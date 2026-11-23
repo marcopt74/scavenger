@@ -403,6 +403,50 @@ export interface SessionPublicState {
   updatedAt: string;
 }
 
+export interface SessionSummary {
+  id: string;
+  repoPath: string;
+  repoName: string;
+  currentStage: OnboardingStage;
+  completedStages: OnboardingStage[];
+  inferredLevel: UserLevel;
+  activeTopicId: string;
+  activeTopicTitle: string;
+  topicsExploredCount: number;
+  solidTopicsCount: number;
+  totalTopicsCount: number;
+  progressPercent: number;
+  messageCount: number;
+  observedFilesCount: number;
+  observedCommitsCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RepoProgressSummary {
+  repoPath: string;
+  repoName: string;
+  sessionCount: number;
+  lastSessionId: string;
+  lastUpdatedAt: string;
+  inferredLevel: UserLevel;
+  completedStages: OnboardingStage[];
+  pillarMasteries: Record<CorePillarId, TopicMastery>;
+  topics: LearningTopic[];
+  exploredTopicsCount: number;
+  solidTopicsCount: number;
+  totalTopicsCount: number;
+  progressPercent: number;
+  totalMessagesCount: number;
+  observedFilesCount: number;
+  observedCommitsCount: number;
+}
+
+export interface SessionsListResponse {
+  sessions: SessionSummary[];
+  repoProgress: RepoProgressSummary[];
+}
+
 export type SSEEvent =
   | { type: 'text-delta'; delta: string }
   | { type: 'tool-activity'; activity: ToolActivity }

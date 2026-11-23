@@ -51,7 +51,7 @@ export async function runDemoTurn(
 ): Promise<string> {
   const recalibrated = callbacks.recalibrated;
 
-  if (!session.diagnostic.completed) {
+  if (!session.diagnostic.completed || !session.completedStages.has(0)) {
     const inferred = recalibrated ?? inferUserLevelFromText(userMessage, 'intermediate');
     session.diagnostic = mergeDiagnosticProfile(session.diagnostic, {
       inferredLevel: inferred,

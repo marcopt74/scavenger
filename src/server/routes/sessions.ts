@@ -13,7 +13,11 @@ import { toKnowledgeBaseStatus } from '../knowledge/knowledgeStore.js';
 import { scanOrRefreshRepoKnowledge } from '../knowledge/scannerAgent.js';
 import {
   createSession,
+  deleteSession,
+  getRepoProgressSummaries,
   getSession,
+  listSessionSummaries,
+  saveSession,
   toPublicState,
   updateSessionCalibration,
   updateSessionKnowledge,
@@ -31,6 +35,7 @@ const createSessionSchema = z.object({
   repoPath: z.string().min(1, 'Repository path is required.'),
   provider: providerSchema,
   forceFullScan: z.boolean().optional(),
+  startFresh: z.boolean().optional(),
 });
 
 const patchSessionSchema = z.object({
@@ -46,6 +51,14 @@ const refreshKnowledgeSchema = z
   .optional();
 
 export const sessionsRouter = new Hono();
+
+sessionsRouter.get('/', (c) => {
+  const repoPath = c.req.query('repoPath') || undefined;
+  return c.json({
+    sessions: listSessionSummaries(repoPath),
+    repoProgress: getRepoProgressSummaries(),
+  });
+});
 
 sessionsRouter.post('/', async (c) => {
   try {
@@ -65,6 +78,7 @@ sessionsRouter.post('/', async (c) => {
     const session = createSession(scanned.recon, provider, {
       knowledgeMap: scanned.knowledgeMap,
       knowledgeStatus: scanned.status,
+      startFresh: parsed.data.startFresh,
     });
     return c.json({ session: toPublicState(session) }, 201);
   } catch (err) {
@@ -135,6 +149,7 @@ sessionsRouter.post('/stream-init', async (c) => {
       const session = createSession(scanned.recon, provider, {
         knowledgeMap: scanned.knowledgeMap,
         knowledgeStatus: scanned.status,
+        startFresh: parsed.data.startFresh,
       });
 
       emit({
@@ -173,6 +188,19 @@ sessionsRouter.get('/:id', (c) => {
   return c.json({ session: toPublicState(session) });
 });
 
+sessionsRouter.delete('/:id', (c) => {
+  const id = c.req.param('id');
+  const deleted = deleteSession(id);
+  if (!deleted) {
+    return c.json({ error: 'Session not found.' }, 404);
+  }
+  return c.json({
+    ok: true,
+    sessions: listSessionSummaries(),
+    repoProgress: getRepoProgressSummaries(),
+  });
+});
+
 sessionsRouter.get('/:id/knowledge', async (c) => {
   const session = getSession(c.req.param('id'));
   if (!session) {
@@ -208,6 +236,7 @@ sessionsRouter.get('/:id/knowledge', async (c) => {
           state: 'stale',
           currentRepoHead: currentHead,
         });
+        saveSession(session);
       }
     }
 

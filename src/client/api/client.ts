@@ -11,6 +11,7 @@ import type {
   SSEEvent,
   ScanSSEEvent,
   SessionPublicState,
+  SessionsListResponse,
   TestConnectionPayload,
   TestConnectionResult,
   UpdateSettingsPayload,
@@ -148,14 +149,53 @@ export async function browseDirectory(
   return data as DirectoryBrowseResponse;
 }
 
+export async function fetchSessionsList(repoPath?: string): Promise<SessionsListResponse> {
+  const params = new URLSearchParams();
+  if (repoPath) params.set('repoPath', repoPath);
+  const query = params.toString();
+  const res = await fetch(`/api/sessions${query ? `?${query}` : ''}`);
+  const data = (await res.json()) as Partial<SessionsListResponse> & { error?: string };
+  if (!res.ok) {
+    throw new Error(data.error || `Failed to load sessions (${res.status})`);
+  }
+  return {
+    sessions: Array.isArray(data.sessions) ? data.sessions : [],
+    repoProgress: Array.isArray(data.repoProgress) ? data.repoProgress : [],
+  };
+}
+
+export async function fetchSession(sessionId: string): Promise<SessionPublicState> {
+  const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`);
+  const data = (await res.json()) as { session?: SessionPublicState; error?: string };
+  if (!res.ok || !data.session) {
+    throw new Error(data.error || `Session not found (${res.status})`);
+  }
+  return data.session;
+}
+
+export async function deleteSessionById(sessionId: string): Promise<SessionsListResponse> {
+  const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'DELETE',
+  });
+  const data = (await res.json()) as Partial<SessionsListResponse> & { error?: string };
+  if (!res.ok) {
+    throw new Error(data.error || `Failed to delete session (${res.status})`);
+  }
+  return {
+    sessions: Array.isArray(data.sessions) ? data.sessions : [],
+    repoProgress: Array.isArray(data.repoProgress) ? data.repoProgress : [],
+  };
+}
+
 export async function createSession(
   repoPath: string,
-  provider?: ProviderSelection
+  provider?: ProviderSelection,
+  options?: { startFresh?: boolean }
 ): Promise<SessionPublicState> {
   const res = await fetch('/api/sessions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ repoPath, provider }),
+    body: JSON.stringify({ repoPath, provider, startFresh: options?.startFresh }),
   });
 
   const data = (await res.json()) as { session?: SessionPublicState; error?: string };
@@ -168,12 +208,13 @@ export async function createSession(
 export async function streamSessionInit(
   repoPath: string,
   onEvent: (event: ScanSSEEvent) => void,
-  provider?: ProviderSelection
+  provider?: ProviderSelection,
+  options?: { startFresh?: boolean }
 ): Promise<SessionPublicState> {
   const res = await fetch('/api/sessions/stream-init', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ repoPath, provider }),
+    body: JSON.stringify({ repoPath, provider, startFresh: options?.startFresh }),
   });
 
   if (!res.ok || !res.body) {
@@ -238,7 +279,7 @@ export async function streamSessionInit(
     throw new Error(streamError);
   }
   if (!completedSession) {
-    return createSession(repoPath, provider);
+    return createSession(repoPath, provider, options);
   }
   return completedSession;
 }

@@ -21,7 +21,7 @@ import {
   setSuggestedNextSteps,
   upsertTopicMastery,
 } from '../session/learningEngine.js';
-import { updateSessionKnowledge } from '../session/sessionStore.js';
+import { saveSession, updateSessionKnowledge } from '../session/sessionStore.js';
 import type { InternalSession } from '../session/sessionStore.js';
 import { mergeDiagnosticProfile } from '../session/stageMachine.js';
 import { grepSearch, listTree, readFileSlice } from './fsTools.js';
@@ -343,6 +343,7 @@ export function createAgentTools(session: InternalSession, ctx: ToolContextCallb
             });
 
             session.updatedAt = new Date().toISOString();
+            saveSession(session);
             return {
               activeTopicId: session.learning.activeTopicId,
               activeTopicTitle: session.learning.activeTopicTitle,
