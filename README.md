@@ -13,7 +13,10 @@ Scavenger is a local **Repository Onboarding Agent** with a clean, Gemini-inspir
 - **Persistent Sessions & Cross-Session Mastery:** Onboarding sessions and cumulative per-repository mastery are persisted locally (`~/.scavenger/sessions/`), automatically restoring your active session across browser refreshes and letting you resume prior sessions, start fresh, or review cross-session progress at any time.
 - **Zero-Commit Local Storage (`~/.scavenger/`):** Both knowledge maps (`~/.scavenger/knowledge/`) and saved sessions (`~/.scavenger/sessions/`) are stored outside the target repository with `0600` permissions and an auto-generated inner `.gitignore` (`*`), plus explicit `.gitignore` and `pathGuard` exclusions so Scavenger artifacts are **never** committed or pushed.
 - **Whiteboard Mentor Pedagogy & Marker Highlights:** Teaches in flowing, grounded narratives — mental models first, then interdependencies, behavior over time, subtle pitfalls, and memorable takeaways — with realistic yellow highlighter callouts (`==key takeaway==`) for core architectural invariants and zero dry file-inventory bullet soup.
-- **Auto-Collapsing Left Toolbar & Non-Linear Learning:** Explore the 5 core repository pillars (**Recon**, **Purpose**, **Architecture**, **Flows**, **Evolution**) from the top rail in any order, or use the auto-collapsing **Left Toolbar** (expandable on hover or pinnable) to inspect the **Knowledge Base (`KB`)**, browse the interactive **Knowledge Map (`Map`)** (pillars, scanned architecture modules, and custom topics), open **Cross-Session Progress (`Progress`)**, or switch **Explanation Depth (`Depth`)**.
+- **Clickable Code & Git Citations + Read-Only Code Peek Inspector (`CodePeekDrawer`):** Every grounded file path (`src/server/guardrails/pathGuard.ts`), line-range reference (`pathGuard.ts:42-88`), commit SHA, and **Tool Activity pill** item in a lesson is an interactive chip. Clicking opens a slide-over **Read-Only Code & Git Peek Inspector** with numbered source lines, highlighted target ranges, exported symbol jump-pills, clickable incoming/outgoing file dependencies (`Imports` / `Imported by`), inline `git blame` / commit diffs, and 1-click **"Ask Scavenger"** actions (*"Explain this slice"*, *"What breaks if this changes?"*).
+- **Interactive Architecture & Dependency Graph Studio (`ArchitectureGraphModal`):** Explore the pre-scanned `RepoKnowledgeMap` visually on an interactive layered SVG canvas (`entry`, `api`, `core`, `guard`, `data`, `ui`, `shared`, `config`, `test`) with **Upstream/Downstream Blast-Radius highlighting** (direct & transitive callers/dependencies + affected file count), **Core Execution Flow path tracer**, a live **Mastery Overlay**, instant search, and a right-hand **Module Inspector** with 1-click file peek and *"Teach Me This Module"*.
+- **1-Click Exportable Onboarding Handbook (`HTML` & `Markdown`):** Export your repository onboarding synthesis, module directory, entry points, core flows, mastery progress, and curated Whiteboard Lessons (preserving `==yellow marker highlights==` and inline diagrams) as a **Self-Contained Interactive HTML Handbook (`.html`)** (with sticky sidebar TOC, search filter, Light/Dark mode, and print styles) or a portable **GitHub-Flavored Markdown Study Guide (`.md`)**.
+- **Auto-Collapsing Left Toolbar & Non-Linear Learning:** Explore the 5 core repository pillars (**Recon**, **Purpose**, **Architecture**, **Flows**, **Evolution**) from the top rail in any order, or use the auto-collapsing **Left Toolbar** (expandable on hover or pinnable) to inspect the **Knowledge Base (`KB`)**, browse the interactive **Knowledge Map (`Map`)**, launch the **Architecture Graph Studio (`Graph Studio`)**, open **Cross-Session Progress (`Progress`)**, switch **Explanation Depth (`Depth`)**, or export your **Onboarding Handbook (`Handbook`)**.
 - **Visual-First Diagrams & 3-Tier Concept Art:**
   - Crisp **Mermaid** SVG diagrams rendered on an architectural dot-grid canvas with semantic color-coded roles, Light/Dark theme adaptation, a 1-click **Clean / Sketch** whiteboard style toggle, **Copy Source**, **SVG** and **2× Retina PNG** export, and an interactive **Zoom & Pan Lightbox**.
   - Optional local **D2** CLI rendering (`d2 --theme=1 --pad=28 - -`, zero disk writes) with automatic fallback.
@@ -221,14 +224,15 @@ src/
 │   ├── session/
 │   │   ├── sessionStore.ts        # Persistent session store (~/.scavenger/sessions/) & cross-session progress
 │   │   ├── learningEngine.ts      # Non-linear topic mastery, check-ins & next-step engine
-│   │   └── stageMachine.ts        # Stage progression & depth calibration heuristics
+│   │   ├── stageMachine.ts        # Stage progression & depth calibration heuristics
+│   │   └── handbookGenerator.ts   # Self-contained HTML & Markdown Onboarding Handbook exporter
 │   ├── agent/
 │   │   ├── pedagogy.ts            # Whiteboard Mentor 5-beat teaching framework & highlighter rules
 │   │   ├── systemPrompt.ts        # Grounded architect persona, knowledge digest & visual guidelines
 │   │   ├── orchestrator.ts        # Multi-step streaming agent loop (SSE)
 │   │   └── demoAgent.ts           # Grounded zero-key local demo responder
 │   └── routes/
-│       ├── sessions.ts            # Session CRUD, SSE scan init, knowledge status & refresh routes
+│       ├── sessions.ts            # Session CRUD, SSE scan init, knowledge graph, code/git peek & handbook export
 │       ├── chat.ts                # POST /api/sessions/:id/chat (SSE)
 │       ├── fs.ts                  # GET /api/fs/browse
 │       ├── settings.ts            # Settings CRUD, connection test & Copilot Device Flow routes
@@ -237,6 +241,8 @@ src/
     ├── App.tsx                    # Minimalist chat shell, session restoration & SSE consumer
     ├── api/client.ts              # Typed REST & SSE API client
     ├── utils/
+    │   ├── citationParser.ts      # Grounded file path, line range, symbol & git commit citation parser
+    │   ├── graphLayout.ts         # Deterministic layered DAG layout, blast radius & flow highlighter
     │   ├── highlightMarkdown.ts   # Transforms ==highlight== syntax into realistic marker callouts
     │   ├── mermaidTheme.ts        # Light/Dark Mermaid v12 theme, lightbox SVG prep & PNG/SVG export
     │   └── theme.ts               # Persistent Light/Dark theme state & DOM attribute sync
@@ -246,16 +252,18 @@ src/
         ├── FileExplorerModal.tsx  # Local folder picker with breadcrumbs, filter & Git badges
         ├── SettingsModal.tsx      # 3-tab Settings UI (Models, API Keys, Visuals & Safety)
         ├── SessionsProgressModal.tsx # Cross-session repository mastery & session history modal
-        ├── StageProgressBar.tsx   # Top bar with Repo pill, Core Pillar rail, Theme & Settings
-        ├── LeftToolbar.tsx        # Auto-collapsing left rail for KB, Knowledge Map, Progress & Depth
+        ├── ArchitectureGraphModal.tsx # Interactive SVG Architecture & Blast-Radius Graph Studio
+        ├── CodePeekDrawer.tsx     # Slide-over read-only code, symbol, dependency & git inspector
+        ├── StageProgressBar.tsx   # Top bar with Repo pill, Core Pillar rail, Graph, Handbook, Theme & Settings
+        ├── LeftToolbar.tsx        # Auto-collapsing left rail for KB, Map, Graph Studio, Progress, Depth & Handbook
         ├── ThemeToggleButton.tsx  # 1-click Light / Dark mode toggle button
         ├── ChatMessageList.tsx    # Reading-first prose stream with scroll-down cue & inline visuals
         ├── LessonFooter.tsx       # Inline Quick Check card & clickable Next Steps cards
-        ├── MarkdownRenderer.tsx   # Markdown renderer with yellow highlights & DiagramCard interception
+        ├── MarkdownRenderer.tsx   # Markdown renderer with yellow highlights, citation chips & DiagramCard
         ├── DiagramCard.tsx        # Mermaid/D2 studio card with Clean/Sketch toggle & export
         ├── ConceptVisualCard.tsx  # Multimodal artwork, bespoke LLM SVG or vector concept card
         ├── VisualLightbox.tsx     # Shared interactive zoom & drag-to-pan fullscreen lightbox
-        ├── ToolActivityPill.tsx   # Collapsible grounded read-only inspection summary
+        ├── ToolActivityPill.tsx   # Collapsible grounded read-only inspection summary with clickable peek rows
         └── Composer.tsx           # Floating pill composer with live phased progress banner & nudges
 ```
 

@@ -1,13 +1,16 @@
 import {
+  BookOpen,
   Check,
   FolderGit2,
   Lock,
+  Network,
   Plus,
   Settings2,
 } from 'lucide-react';
 import { ONBOARDING_STAGES } from '../../shared/types';
 import type {
   CorePillarId,
+  HandbookExportFormat,
   SessionPublicState,
   TopicMastery,
 } from '../../shared/types';
@@ -17,7 +20,10 @@ import { ThemeToggleButton } from './ThemeToggleButton';
 interface StageProgressBarProps {
   session: SessionPublicState;
   disabled: boolean;
+  exportingHandbook?: boolean;
   onSelectPillar: (pillarId: CorePillarId, title: string) => void;
+  onOpenGraphStudio?: () => void;
+  onExportHandbook?: (format: HandbookExportFormat) => void;
   onOpenSettings: () => void;
   theme?: ThemeMode;
   onToggleTheme?: () => void;
@@ -34,7 +40,10 @@ const MASTERY_LABELS: Record<TopicMastery, string> = {
 export function StageProgressBar({
   session,
   disabled,
+  exportingHandbook = false,
   onSelectPillar,
+  onOpenGraphStudio,
+  onExportHandbook,
   onOpenSettings,
   theme = 'light',
   onToggleTheme,
@@ -83,6 +92,33 @@ export function StageProgressBar({
       </nav>
 
       <div className="topbar-right">
+        {onOpenGraphStudio && (
+          <button
+            type="button"
+            className="topbar-chip-btn"
+            onClick={onOpenGraphStudio}
+            title="Open Interactive Architecture & Dependency Graph Studio"
+            aria-label="Open Architecture Graph Studio"
+          >
+            <Network size={14} />
+            <span>Graph</span>
+          </button>
+        )}
+
+        {onExportHandbook && (
+          <button
+            type="button"
+            className="topbar-chip-btn"
+            disabled={exportingHandbook}
+            onClick={() => onExportHandbook('html')}
+            title="Export Self-Contained HTML Onboarding Handbook"
+            aria-label="Export Onboarding Handbook"
+          >
+            <BookOpen size={14} />
+            <span>{exportingHandbook ? 'Exporting…' : 'Handbook'}</span>
+          </button>
+        )}
+
         {onToggleTheme && (
           <ThemeToggleButton theme={theme} onToggle={onToggleTheme} />
         )}

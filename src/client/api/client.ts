@@ -1,10 +1,15 @@
 import type {
+  CodePeekFileResponse,
+  CodePeekGitResponse,
   CopilotDeviceFlowPollResponse,
   CopilotDeviceFlowStartResponse,
   CopilotModelsResponse,
   DirectoryBrowseResponse,
+  HandbookExportFormat,
+  HandbookExportResponse,
   HealthInfo,
   KnowledgeBaseStatus,
+  KnowledgeGraphResponse,
   OnboardingStage,
   ProviderSelection,
   PublicSettings,
@@ -379,6 +384,83 @@ export async function renderD2Diagram(
     body: JSON.stringify({ source }),
   });
   return res.json() as Promise<{ ok: boolean; svg?: string; error?: string }>;
+}
+
+export async function fetchCodePeekFile(
+  sessionId: string,
+  options: {
+    path: string;
+    startLine?: number;
+    endLine?: number;
+  }
+): Promise<CodePeekFileResponse> {
+  const params = new URLSearchParams();
+  params.set('path', options.path);
+  if (options.startLine !== undefined) params.set('startLine', String(options.startLine));
+  if (options.endLine !== undefined) params.set('endLine', String(options.endLine));
+
+  const res = await fetch(
+    `/api/sessions/${encodeURIComponent(sessionId)}/peek/file?${params.toString()}`
+  );
+  const data = (await res.json()) as Partial<CodePeekFileResponse> & { error?: string };
+  if (!res.ok || !data.path) {
+    throw new Error(data.error || `Failed to inspect file (${res.status})`);
+  }
+  return data as CodePeekFileResponse;
+}
+
+export async function fetchCodePeekGit(
+  sessionId: string,
+  options: {
+    subcommand: 'show' | 'blame' | 'log';
+    target?: string;
+    startLine?: number;
+    endLine?: number;
+  }
+): Promise<CodePeekGitResponse> {
+  const params = new URLSearchParams();
+  params.set('subcommand', options.subcommand);
+  if (options.target) params.set('target', options.target);
+  if (options.startLine !== undefined) params.set('startLine', String(options.startLine));
+  if (options.endLine !== undefined) params.set('endLine', String(options.endLine));
+
+  const res = await fetch(
+    `/api/sessions/${encodeURIComponent(sessionId)}/peek/git?${params.toString()}`
+  );
+  const data = (await res.json()) as Partial<CodePeekGitResponse> & { error?: string };
+  if (!res.ok || data.output === undefined) {
+    throw new Error(data.error || `Failed to inspect git history (${res.status})`);
+  }
+  return data as CodePeekGitResponse;
+}
+
+export async function fetchKnowledgeGraph(
+  sessionId: string
+): Promise<KnowledgeGraphResponse> {
+  const res = await fetch(
+    `/api/sessions/${encodeURIComponent(sessionId)}/knowledge/graph`
+  );
+  const data = (await res.json()) as Partial<KnowledgeGraphResponse> & { error?: string };
+  if (!res.ok || !Array.isArray(data.modules)) {
+    throw new Error(data.error || `Failed to load architecture graph (${res.status})`);
+  }
+  return data as KnowledgeGraphResponse;
+}
+
+export async function exportSessionHandbook(
+  sessionId: string,
+  format: HandbookExportFormat = 'html'
+): Promise<HandbookExportResponse> {
+  const params = new URLSearchParams();
+  params.set('format', format);
+  const res = await fetch(
+    `/api/sessions/${encodeURIComponent(sessionId)}/export?${params.toString()}`
+  );
+  const data = (await res.json()) as Partial<HandbookExportResponse> & { error?: string };
+  if (!res.ok || !data.content || !data.filename) {
+    throw new Error(data.error || `Failed to export onboarding handbook (${res.status})`);
+  }
+  return data as HandbookExportResponse;
 }
 
 export async function streamChatTurn(

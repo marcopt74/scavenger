@@ -146,8 +146,6 @@ describe('Light & Dark Theme Toggle', () => {
         session: mockSession,
         disabled: false,
         onSelectPillar: () => {},
-        onSelectTopic: () => {},
-        onChangeLevel: () => {},
         onOpenSettings: () => {},
         onResetSession: () => {},
         theme: 'dark',

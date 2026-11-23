@@ -1,8 +1,14 @@
 import { ChevronDown, ChevronRight, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
-import type { ToolActivity } from '../../shared/types';
+import type { CodePeekTarget, ToolActivity } from '../../shared/types';
+import { parseToolActivityTarget } from '../utils/citationParser';
 
-export function ToolActivityPill({ activities }: { activities: ToolActivity[] }) {
+export interface ToolActivityPillProps {
+  activities: ToolActivity[];
+  onOpenCodePeek?: (target: CodePeekTarget) => void;
+}
+
+export function ToolActivityPill({ activities, onOpenCodePeek }: ToolActivityPillProps) {
   const [open, setOpen] = useState(false);
 
   if (!activities || activities.length === 0) return null;
@@ -34,13 +40,39 @@ export function ToolActivityPill({ activities }: { activities: ToolActivity[] })
 
       {open && (
         <div className="tool-pill-list">
-          {activities.map((act) => (
-            <div key={act.id} className="tool-pill-item">
-              <span className={`tool-status-dot ${act.status}`} />
-              <span className="tool-name-tag">{act.toolName}</span>
-              <span>{act.summary}</span>
-            </div>
-          ))}
+          {activities.map((act) => {
+            const peekTarget = onOpenCodePeek ? parseToolActivityTarget(act) : null;
+            const isClickable = Boolean(peekTarget && onOpenCodePeek);
+
+            return (
+              <div
+                key={act.id}
+                className={isClickable ? 'tool-pill-item is-clickable' : 'tool-pill-item'}
+                onClick={
+                  isClickable && peekTarget && onOpenCodePeek
+                    ? () => onOpenCodePeek(peekTarget)
+                    : undefined
+                }
+                onKeyDown={
+                  isClickable && peekTarget && onOpenCodePeek
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onOpenCodePeek(peekTarget);
+                        }
+                      }
+                    : undefined
+                }
+                role={isClickable ? 'button' : undefined}
+                tabIndex={isClickable ? 0 : undefined}
+                title={isClickable ? 'Click to peek in Read-Only Inspector' : undefined}
+              >
+                <span className={`tool-status-dot ${act.status}`} />
+                <span className="tool-name-tag">{act.toolName}</span>
+                <span>{act.summary}</span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

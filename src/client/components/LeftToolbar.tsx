@@ -1,9 +1,14 @@
 import {
   Activity,
+  BookOpen,
   Check,
   ChevronRight,
   Database,
+  Download,
+  FileCode2,
+  FileText,
   Map as MapIcon,
+  Network,
   PanelLeftClose,
   PanelLeftOpen,
   RefreshCw,
@@ -11,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type {
+  HandbookExportFormat,
   LearningTopic,
   RepoProgressSummary,
   SessionPublicState,
@@ -22,11 +28,14 @@ export interface LeftToolbarProps {
   session: SessionPublicState;
   disabled: boolean;
   refreshingKnowledge?: boolean;
+  exportingHandbook?: boolean;
   currentRepoProgress?: RepoProgressSummary;
   totalSessionsCount?: number;
   onSelectTopic: (topic: LearningTopic) => void;
   onSelectModule?: (moduleId: string) => void;
   onRefreshKnowledge?: () => void;
+  onOpenGraphStudio?: () => void;
+  onExportHandbook?: (format: HandbookExportFormat) => void;
   onChangeLevel: (level: UserLevel) => void;
   onOpenProgressModal?: () => void;
 }
@@ -79,11 +88,14 @@ export function LeftToolbar({
   session,
   disabled,
   refreshingKnowledge = false,
+  exportingHandbook = false,
   currentRepoProgress,
   totalSessionsCount = 1,
   onSelectTopic,
   onSelectModule,
   onRefreshKnowledge,
+  onOpenGraphStudio,
+  onExportHandbook,
   onChangeLevel,
   onOpenProgressModal,
 }: LeftToolbarProps) {
@@ -91,10 +103,12 @@ export function LeftToolbar({
   const [isPinned, setIsPinned] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const [levelOpen, setLevelOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const hoverTimeoutRef = useRef<number | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const levelRef = useRef<HTMLDivElement>(null);
+  const exportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleOutsideClick(e: MouseEvent) {
@@ -104,6 +118,9 @@ export function LeftToolbar({
       }
       if (levelRef.current && !levelRef.current.contains(target)) {
         setLevelOpen(false);
+      }
+      if (exportRef.current && !exportRef.current.contains(target)) {
+        setExportOpen(false);
       }
     }
     document.addEventListener('mousedown', handleOutsideClick);
@@ -135,7 +152,7 @@ export function LeftToolbar({
     }, 150);
   }
 
-  const isExpanded = isHovered || isPinned || mapOpen || levelOpen;
+  const isExpanded = isHovered || isPinned || mapOpen || levelOpen || exportOpen;
 
   const learning = session.learning;
   const pillarTopics = learning.topics.filter((t) => t.kind === 'pillar');
@@ -316,6 +333,19 @@ export function LeftToolbar({
                   <div className="knowledge-section-label">
                     Scanned Repo Modules ({kbModules.length})
                   </div>
+                  {onOpenGraphStudio && (
+                    <button
+                      type="button"
+                      className="kb-open-graph-btn"
+                      onClick={() => {
+                        setMapOpen(false);
+                        onOpenGraphStudio();
+                      }}
+                    >
+                      <Network size={13} />
+                      <span>Open Interactive Architecture Graph Studio</span>
+                    </button>
+                  )}
                   {kbModules.slice(0, 10).map((mod) => (
                     <button
                       key={mod.id}
@@ -339,6 +369,35 @@ export function LeftToolbar({
             </div>
           )}
         </div>
+
+        {onOpenGraphStudio && (
+          <button
+            type="button"
+            className="left-toolbar-btn"
+            onClick={() => {
+              setMapOpen(false);
+              setLevelOpen(false);
+              setExportOpen(false);
+              onOpenGraphStudio();
+            }}
+            title="Open Interactive Architecture & Dependency Graph Studio (Blast Radius, Core Flows, Mastery Overlay)"
+          >
+            <span className="left-toolbar-icon-wrap">
+              <Network size={16} />
+              {kbModules.length > 0 && (
+                <span className="left-toolbar-mini-badge">{kbModules.length}</span>
+              )}
+            </span>
+            <span className="left-toolbar-copy">
+              <span className="left-toolbar-label">
+                Graph Studio
+              </span>
+              <span className="left-toolbar-sub">
+                Blast radius & flows
+              </span>
+            </span>
+          </button>
+        )}
 
         {onOpenProgressModal && (
           <button
@@ -414,6 +473,80 @@ export function LeftToolbar({
             </div>
           )}
         </div>
+
+        {onExportHandbook && (
+          <div className="left-toolbar-menu-wrap" ref={exportRef}>
+            <button
+              type="button"
+              className={`left-toolbar-btn ${exportOpen ? 'is-active' : ''}`}
+              disabled={exportingHandbook}
+              onClick={() => {
+                setExportOpen((v) => !v);
+                setMapOpen(false);
+                setLevelOpen(false);
+              }}
+              title="Export 1-Click Onboarding Handbook (Self-Contained HTML or Markdown Study Guide)"
+              aria-expanded={exportOpen}
+            >
+              <span className="left-toolbar-icon-wrap">
+                <BookOpen size={16} />
+              </span>
+              <span className="left-toolbar-copy">
+                <span className="left-toolbar-label">
+                  {exportingHandbook ? 'Exporting…' : 'Handbook'}
+                </span>
+                <span className="left-toolbar-sub">Export HTML / MD guide</span>
+              </span>
+              <ChevronRight size={14} className="left-toolbar-chevron" />
+            </button>
+
+            {exportOpen && (
+              <div className="level-popover left-toolbar-popover export-handbook-popover">
+                <div className="level-popover-title">Export Onboarding Handbook</div>
+                <button
+                  type="button"
+                  className="level-option"
+                  disabled={exportingHandbook}
+                  onClick={() => {
+                    onExportHandbook('html');
+                    setExportOpen(false);
+                  }}
+                >
+                  <div className="level-option-top">
+                    <span className="level-option-name" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <FileCode2 size={13} />
+                      <span>Self-Contained HTML Handbook (.html)</span>
+                    </span>
+                    <Download size={13} className="level-option-check" />
+                  </div>
+                  <span className="level-option-desc">
+                    Interactive single-file guide with sidebar TOC, Light/Dark mode, diagrams & highlights
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="level-option"
+                  disabled={exportingHandbook}
+                  onClick={() => {
+                    onExportHandbook('md');
+                    setExportOpen(false);
+                  }}
+                >
+                  <div className="level-option-top">
+                    <span className="level-option-name" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <FileText size={13} />
+                      <span>Markdown Study Guide (.md)</span>
+                    </span>
+                    <Download size={13} className="level-option-check" />
+                  </div>
+                  <span className="level-option-desc">
+                    GitHub-Flavored Markdown with Mermaid diagrams, module tables & lesson takeaways
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="left-toolbar-footer">

@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   ChatMessage,
+  CodePeekTarget,
   CorePillarId,
+  HandbookExportFormat,
   HealthInfo,
   LearningTopic,
   ProviderSelection,
@@ -15,6 +17,7 @@ import type {
 import {
   checkSessionKnowledgeStatus,
   deleteSessionById,
+  exportSessionHandbook,
   fetchHealth,
   fetchSession,
   fetchSessionsList,
@@ -23,7 +26,9 @@ import {
   streamChatTurn,
   streamSessionInit,
 } from './api/client';
+import { ArchitectureGraphModal } from './components/ArchitectureGraphModal';
 import { ChatMessageList } from './components/ChatMessageList';
+import { CodePeekDrawer } from './components/CodePeekDrawer';
 import { Composer } from './components/Composer';
 import { LeftToolbar } from './components/LeftToolbar';
 import { RepoWelcome } from './components/RepoWelcome';
@@ -91,9 +96,12 @@ export function App() {
   const [chatError, setChatError] = useState<string | null>(null);
 
   const [refreshingKnowledge, setRefreshingKnowledge] = useState(false);
+  const [exportingHandbook, setExportingHandbook] = useState(false);
   const [knowledgeToast, setKnowledgeToast] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [progressModalOpen, setProgressModalOpen] = useState(false);
+  const [graphStudioOpen, setGraphStudioOpen] = useState(false);
+  const [codePeekTarget, setCodePeekTarget] = useState<CodePeekTarget | null>(null);
 
   useEffect(() => {
     applyDocumentTheme(theme);
@@ -291,6 +299,28 @@ export function App() {
     }
   }
 
+  async function handleExportHandbook(format: HandbookExportFormat = 'html') {
+    if (!session || exportingHandbook) return;
+    setExportingHandbook(true);
+    try {
+      const exported = await exportSessionHandbook(session.id, format);
+      const blob = new Blob([exported.content], { type: exported.mimeType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = exported.filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setKnowledgeToast(`Exported Onboarding Handbook: ${exported.filename}`);
+    } catch (err) {
+      setChatError(err instanceof Error ? err.message : 'Failed to export onboarding handbook.');
+    } finally {
+      setExportingHandbook(false);
+    }
+  }
+
   async function handleSend(text: string) {
     if (!session || isStreaming) return;
 
@@ -431,6 +461,27 @@ export function App() {
     ? repoProgressList.find((r) => r.repoPath === session.repoPath)
     : undefined;
 
+  const knownFiles = useMemo(() => {
+    if (!session) return [];
+    const set = new Set<string>();
+    for (const topic of session.learning.topics) {
+      for (const f of topic.relatedFiles ?? []) set.add(f);
+    }
+    for (const ep of session.knowledgeStatus?.entryPoints ?? []) {
+      set.add(ep.path);
+    }
+    for (const flow of session.knowledgeStatus?.coreFlows ?? []) {
+      for (const f of flow.files) set.add(f);
+    }
+    for (const m of session.rootRecon.manifests ?? []) {
+      set.add(m.path);
+    }
+    if (session.rootRecon.readmePath) {
+      set.add(session.rootRecon.readmePath);
+    }
+    return [...set];
+  }, [session]);
+
   return (
     <div className="app-shell">
       {!session ? (
@@ -456,12 +507,17 @@ export function App() {
           <StageProgressBar
             session={session}
             disabled={isStreaming}
+            exportingHandbook={exportingHandbook}
             onSelectPillar={handleSelectPillar}
+            onOpenGraphStudio={() => setGraphStudioOpen(true)}
+            onExportHandbook={(format) => void handleExportHandbook(format)}
             onOpenSettings={() => setSettingsOpen(true)}
             theme={theme}
             onToggleTheme={handleToggleTheme}
             onResetSession={() => {
               setSession(null);
+              setCodePeekTarget(null);
+              setGraphStudioOpen(false);
               writeStoredSessionId(null);
               setChatError(null);
               setKnowledgeToast(null);
@@ -474,6 +530,7 @@ export function App() {
               session={session}
               disabled={isStreaming}
               refreshingKnowledge={refreshingKnowledge}
+              exportingHandbook={exportingHandbook}
               currentRepoProgress={currentRepoProgress}
               totalSessionsCount={sessionsList.length}
               onSelectTopic={handleSelectTopic}
@@ -483,6 +540,8 @@ export function App() {
                 )
               }
               onRefreshKnowledge={() => void handleRefreshKnowledge('full')}
+              onOpenGraphStudio={() => setGraphStudioOpen(true)}
+              onExportHandbook={(format) => void handleExportHandbook(format)}
               onChangeLevel={handleChangeLevel}
               onOpenProgressModal={() => {
                 void refreshSessionsCatalog();
@@ -505,6 +564,8 @@ export function App() {
                 streamingVisuals={streamingVisuals}
                 isStreaming={isStreaming}
                 onSelectPrompt={(prompt) => void handleSend(prompt)}
+                onOpenCodePeek={(target) => setCodePeekTarget(target)}
+                knownFiles={knownFiles}
               />
 
               {chatError && (
@@ -529,7 +590,35 @@ export function App() {
                 onSend={(prompt) => void handleSend(prompt)}
               />
             </div>
+
+            <CodePeekDrawer
+              sessionId={session.id}
+              target={codePeekTarget}
+              disabled={isStreaming}
+              onClose={() => setCodePeekTarget(null)}
+              onSelectTarget={(nextTarget) => setCodePeekTarget(nextTarget)}
+              onAskScavenger={(prompt) => {
+                setCodePeekTarget(null);
+                void handleSend(prompt);
+              }}
+            />
           </div>
+
+          {graphStudioOpen && (
+            <ArchitectureGraphModal
+              session={session}
+              disabled={isStreaming}
+              onClose={() => setGraphStudioOpen(false)}
+              onSelectModuleToLearn={(_moduleId, prompt) => {
+                setGraphStudioOpen(false);
+                void handleSend(prompt);
+              }}
+              onOpenFilePeek={(target) => {
+                setGraphStudioOpen(false);
+                setCodePeekTarget(target);
+              }}
+            />
+          )}
         </>
       )}
 

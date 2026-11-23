@@ -1,7 +1,7 @@
 import { ArrowDown } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ONBOARDING_STAGES } from '../../shared/types';
-import type { ChatMessage, ToolActivity, VisualArtifact } from '../../shared/types';
+import type { ChatMessage, CodePeekTarget, ToolActivity, VisualArtifact } from '../../shared/types';
 import { ConceptVisualCard } from './ConceptVisualCard';
 import { DiagramCard } from './DiagramCard';
 import { LessonFooter } from './LessonFooter';
@@ -35,6 +35,8 @@ interface ChatMessageListProps {
   streamingVisuals: VisualArtifact[];
   isStreaming: boolean;
   onSelectPrompt: (prompt: string) => void;
+  onOpenCodePeek?: (target: CodePeekTarget) => void;
+  knownFiles?: string[];
   initialHasMoreBelow?: boolean;
 }
 
@@ -46,6 +48,8 @@ export function ChatMessageList({
   streamingVisuals,
   isStreaming,
   onSelectPrompt,
+  onOpenCodePeek,
+  knownFiles,
   initialHasMoreBelow = false,
 }: ChatMessageListProps) {
   const scrollContainerRef = useRef<HTMLElement>(null);
@@ -133,14 +137,21 @@ export function ChatMessageList({
                     </div>
 
                     {msg.toolActivities && msg.toolActivities.length > 0 && (
-                      <ToolActivityPill activities={msg.toolActivities} />
+                      <ToolActivityPill
+                        activities={msg.toolActivities}
+                        onOpenCodePeek={onOpenCodePeek}
+                      />
                     )}
 
                     {msg.visuals && msg.visuals.length > 0 && (
                       <VisualStack visuals={msg.visuals} />
                     )}
 
-                    <MarkdownRenderer content={msg.content} />
+                    <MarkdownRenderer
+                      content={msg.content}
+                      onOpenCodePeek={onOpenCodePeek}
+                      knownFiles={knownFiles}
+                    />
 
                     <LessonFooter
                       checkInQuestions={msg.checkInQuestions}
@@ -164,7 +175,10 @@ export function ChatMessageList({
                 </div>
 
                 {streamingActivities.length > 0 && (
-                  <ToolActivityPill activities={streamingActivities} />
+                  <ToolActivityPill
+                    activities={streamingActivities}
+                    onOpenCodePeek={onOpenCodePeek}
+                  />
                 )}
 
                 {streamingVisuals.length > 0 && (
@@ -172,7 +186,12 @@ export function ChatMessageList({
                 )}
 
                 {streamingText ? (
-                  <MarkdownRenderer content={streamingText} isStreaming />
+                  <MarkdownRenderer
+                    content={streamingText}
+                    isStreaming
+                    onOpenCodePeek={onOpenCodePeek}
+                    knownFiles={knownFiles}
+                  />
                 ) : (
                   <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
                     Preparing grounded response<span className="streaming-cursor" />

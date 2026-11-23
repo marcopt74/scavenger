@@ -1,19 +1,33 @@
+import { FileCode, GitCommitHorizontal } from 'lucide-react';
+import { createContext, useContext } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import type { CodePeekTarget } from '../../shared/types';
+import { parseCodeCitation } from '../utils/citationParser';
 import { remarkHighlighter } from '../utils/highlightMarkdown';
 import { DiagramCard } from './DiagramCard';
 
 interface MarkdownRendererProps {
   content: string;
   isStreaming?: boolean;
+  onOpenCodePeek?: (target: CodePeekTarget) => void;
+  knownFiles?: string[];
 }
+
+const InsidePreContext = createContext<boolean>(false);
 
 /**
  * Renders Markdown cleanly while intercepting any fenced `mermaid` or `d2` blocks
  * and displaying them visually as SVG DiagramCards rather than raw diagram syntax,
- * and rendering `==...==` (plus smart fallback insights) with a realistic yellow highlighter effect.
+ * rendering `==...==` (plus smart fallback insights) with a realistic yellow highlighter effect,
+ * and turning inline file/line/commit citations into clickable Read-Only Code Peek chips.
  */
-export function MarkdownRenderer({ content, isStreaming = false }: MarkdownRendererProps) {
+export function MarkdownRenderer({
+  content,
+  isStreaming = false,
+  onOpenCodePeek,
+  knownFiles,
+}: MarkdownRendererProps) {
   return (
     <div className={isStreaming ? 'prose is-streaming' : 'prose'}>
       <ReactMarkdown
@@ -56,7 +70,50 @@ export function MarkdownRenderer({ content, isStreaming = false }: MarkdownRende
                 );
               }
             }
-            return <pre>{children}</pre>;
+            return (
+              <InsidePreContext.Provider value={true}>
+                <pre>{children}</pre>
+              </InsidePreContext.Provider>
+            );
+          },
+          code({ className, children }) {
+            const insidePre = useContext(InsidePreContext);
+            const rawText = String(children ?? '');
+            const isBlock =
+              insidePre ||
+              Boolean(className && className.includes('language-')) ||
+              rawText.includes('\n');
+
+            if (!isBlock && onOpenCodePeek) {
+              const target = parseCodeCitation(rawText, { knownFiles });
+              if (target) {
+                return (
+                  <button
+                    type="button"
+                    className="inline-citation-chip"
+                    onClick={() => onOpenCodePeek(target)}
+                    title="Click to peek in Read-Only Inspector"
+                  >
+                    {target.kind === 'git' ? (
+                      <GitCommitHorizontal
+                        size={12}
+                        className="inline-citation-icon"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <FileCode
+                        size={12}
+                        className="inline-citation-icon"
+                        aria-hidden="true"
+                      />
+                    )}
+                    <span>{children}</span>
+                  </button>
+                );
+              }
+            }
+
+            return <code className={className}>{children}</code>;
           },
         }}
       >

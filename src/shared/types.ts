@@ -629,3 +629,82 @@ export interface DirectoryBrowseResponse {
   truncated: boolean;
   shortcuts: DirectoryShortcut[];
 }
+
+export interface CodePeekTarget {
+  kind: 'file' | 'git';
+  path?: string;
+  startLine?: number;
+  endLine?: number;
+  highlightStart?: number;
+  highlightEnd?: number;
+  symbol?: string;
+  commitSha?: string;
+  gitSubcommand?: 'show' | 'blame' | 'log';
+}
+
+export interface CodePeekLine {
+  lineNumber: number;
+  text: string;
+}
+
+export interface CodePeekFileResponse {
+  path: string;
+  language: string;
+  startLine: number;
+  endLine: number;
+  totalLines: number;
+  truncated: boolean;
+  isBinary: boolean;
+  content: string;
+  lines: CodePeekLine[];
+  moduleId?: string;
+  moduleLayer?: RepoModuleLayer;
+  roleSummary?: string;
+  isEntryPoint?: boolean;
+  exports: RepoExportedSymbol[];
+  importedByFiles: string[];
+  importsRepoFiles: string[];
+}
+
+export interface CodePeekGitResponse {
+  isGitRepo: boolean;
+  subcommand: 'show' | 'blame' | 'log';
+  target: string;
+  command: string;
+  output: string;
+  truncated: boolean;
+  observedCommits: string[];
+}
+
+export interface KnowledgeGraphModuleNode extends RepoModuleNode {
+  mastery: TopicMastery;
+  observedFileCount: number;
+  relatedTopicId?: string;
+  relatedTopicTitle?: string;
+}
+
+export interface KnowledgeGraphResponse {
+  repoName: string;
+  repoPath: string;
+  headCommit?: string;
+  branch?: string;
+  scannedAt: string;
+  updatedAt: string;
+  scanStrategy: 'hybrid' | 'static';
+  stats: RepoKnowledgeStats;
+  summary: RepoKnowledgeSummary;
+  modules: KnowledgeGraphModuleNode[];
+  files: RepoFileIndexEntry[];
+  dependencyEdges: RepoDependencyEdge[];
+}
+
+export type HandbookExportFormat = 'html' | 'md';
+
+export interface HandbookExportResponse {
+  format: HandbookExportFormat;
+  filename: string;
+  mimeType: string;
+  content: string;
+  generatedAt: string;
+}
+
