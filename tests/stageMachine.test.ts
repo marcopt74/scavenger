@@ -3,6 +3,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { SSEEvent } from '../src/shared/types.js';
+import {
+  formatDepthLabel,
+  LEVEL_OPTIONS,
+} from '../src/client/components/LeftToolbar.js';
 import { runOnboardingTurn } from '../src/server/agent/orchestrator.js';
 import { createSession } from '../src/server/session/sessionStore.js';
 import {
@@ -50,6 +54,18 @@ describe('adaptive non-linear onboarding & mastery progression', () => {
   it('allows free non-linear movement between pillars', () => {
     expect(validateStageTransition(0, 3)).toEqual({ allowed: true, nextStage: 3 });
     expect(validateStageTransition(4, 1)).toEqual({ allowed: true, nextStage: 1 });
+  });
+
+  it('includes Auto (uncalibrated) in LeftToolbar LEVEL_OPTIONS so users can revert back to Auto', () => {
+    expect(LEVEL_OPTIONS.map((o) => o.value)).toEqual([
+      'uncalibrated',
+      'foundational',
+      'intermediate',
+      'advanced',
+    ]);
+    expect(LEVEL_OPTIONS[0]?.label).toBe('Auto');
+    expect(formatDepthLabel('uncalibrated')).toBe('Auto');
+    expect(formatDepthLabel('advanced')).toBe('Advanced');
   });
 
   it('steers non-linearly: custom topic learning, check-in mastery inference, reinforcement, and 2-3 next steps', async () => {

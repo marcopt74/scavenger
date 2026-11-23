@@ -577,9 +577,7 @@ export function updateSessionCalibration(
 ): InternalSession {
   if (patch.inferredLevel) {
     session.diagnostic.inferredLevel = patch.inferredLevel;
-    if (patch.inferredLevel !== 'uncalibrated') {
-      session.diagnostic.completed = true;
-    }
+    session.diagnostic.completed = patch.inferredLevel !== 'uncalibrated';
   }
   if (patch.currentStage !== undefined) {
     session.currentStage = patch.currentStage;

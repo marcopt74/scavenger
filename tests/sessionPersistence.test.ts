@@ -176,4 +176,48 @@ describe('Session Persistence, Refresh Recovery & Cross-Session Progress', () =>
     expect(delBody.sessions.length).toBe(2);
     expect(delBody.repoProgress[0]?.sessionCount).toBe(2);
   });
+
+  it('allows reverting depth selection back to Auto (uncalibrated) via PATCH /api/sessions/:id', async () => {
+    const app = createApp();
+
+    const createRes = await app.request('/api/sessions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        repoPath: process.cwd(),
+        provider: { provider: 'demo', model: 'local-grounded-demo' },
+        startFresh: true,
+      }),
+    });
+    expect(createRes.status).toBe(201);
+    const { session: created } = (await createRes.json()) as { session: SessionPublicState };
+    expect(created.diagnostic.inferredLevel).toBe('uncalibrated');
+    expect(created.diagnostic.completed).toBe(false);
+
+    // Select a manual depth level
+    const patchManualRes = await app.request(`/api/sessions/${created.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ inferredLevel: 'advanced' }),
+    });
+    expect(patchManualRes.status).toBe(200);
+    const { session: manualSession } = (await patchManualRes.json()) as {
+      session: SessionPublicState;
+    };
+    expect(manualSession.diagnostic.inferredLevel).toBe('advanced');
+    expect(manualSession.diagnostic.completed).toBe(true);
+
+    // Revert back to Auto (uncalibrated)
+    const patchAutoRes = await app.request(`/api/sessions/${created.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ inferredLevel: 'uncalibrated' }),
+    });
+    expect(patchAutoRes.status).toBe(200);
+    const { session: autoSession } = (await patchAutoRes.json()) as {
+      session: SessionPublicState;
+    };
+    expect(autoSession.diagnostic.inferredLevel).toBe('uncalibrated');
+    expect(autoSession.diagnostic.completed).toBe(false);
+  });
 });

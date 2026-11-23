@@ -25,6 +25,7 @@ import {
 } from './api/client';
 import { ChatMessageList } from './components/ChatMessageList';
 import { Composer } from './components/Composer';
+import { LeftToolbar } from './components/LeftToolbar';
 import { RepoWelcome } from './components/RepoWelcome';
 import type { ScanProgressState } from './components/RepoWelcome';
 import { SessionsProgressModal } from './components/SessionsProgressModal';
@@ -455,18 +456,7 @@ export function App() {
           <StageProgressBar
             session={session}
             disabled={isStreaming}
-            refreshingKnowledge={refreshingKnowledge}
-            currentRepoProgress={currentRepoProgress}
-            totalSessionsCount={sessionsList.length}
             onSelectPillar={handleSelectPillar}
-            onSelectTopic={handleSelectTopic}
-            onSelectModule={(modId) => void handleSend(`Teach me how the \`${modId}\` module works and how it connects to the rest of the repo.`)}
-            onRefreshKnowledge={() => void handleRefreshKnowledge('full')}
-            onChangeLevel={handleChangeLevel}
-            onOpenProgressModal={() => {
-              void refreshSessionsCatalog();
-              setProgressModalOpen(true);
-            }}
             onOpenSettings={() => setSettingsOpen(true)}
             theme={theme}
             onToggleTheme={handleToggleTheme}
@@ -479,43 +469,67 @@ export function App() {
             }}
           />
 
-          {knowledgeToast && (
-            <div className="knowledge-toast-banner" role="status">
-              <span>{knowledgeToast}</span>
+          <div className="session-workspace">
+            <LeftToolbar
+              session={session}
+              disabled={isStreaming}
+              refreshingKnowledge={refreshingKnowledge}
+              currentRepoProgress={currentRepoProgress}
+              totalSessionsCount={sessionsList.length}
+              onSelectTopic={handleSelectTopic}
+              onSelectModule={(modId) =>
+                void handleSend(
+                  `Teach me how the \`${modId}\` module works and how it connects to the rest of the repo.`
+                )
+              }
+              onRefreshKnowledge={() => void handleRefreshKnowledge('full')}
+              onChangeLevel={handleChangeLevel}
+              onOpenProgressModal={() => {
+                void refreshSessionsCatalog();
+                setProgressModalOpen(true);
+              }}
+            />
+
+            <div className="session-main">
+              {knowledgeToast && (
+                <div className="knowledge-toast-banner" role="status">
+                  <span>{knowledgeToast}</span>
+                </div>
+              )}
+
+              <ChatMessageList
+                messages={session.messages}
+                activeTopicTitle={session.learning.activeTopicTitle}
+                streamingText={streamingText}
+                streamingActivities={streamingActivities}
+                streamingVisuals={streamingVisuals}
+                isStreaming={isStreaming}
+                onSelectPrompt={(prompt) => void handleSend(prompt)}
+              />
+
+              {chatError && (
+                <div style={{ maxWidth: 780, width: '100%', margin: '0 auto 6px', padding: '0 20px' }}>
+                  <div className="error-banner" style={{ marginTop: 0 }}>
+                    {chatError}
+                  </div>
+                </div>
+              )}
+
+              <Composer
+                diagnostic={session.diagnostic}
+                activeTopicTitle={session.learning.activeTopicTitle}
+                hasPendingCheckIn={session.learning.pendingCheckIn.length > 0}
+                provider={provider}
+                observedFilesCount={session.observedFilesCount}
+                observedCommitsCount={session.observedCommitsCount}
+                disabled={isStreaming}
+                streamingText={streamingText}
+                streamingActivities={streamingActivities}
+                streamingVisuals={streamingVisuals}
+                onSend={(prompt) => void handleSend(prompt)}
+              />
             </div>
-          )}
-
-          <ChatMessageList
-            messages={session.messages}
-            activeTopicTitle={session.learning.activeTopicTitle}
-            streamingText={streamingText}
-            streamingActivities={streamingActivities}
-            streamingVisuals={streamingVisuals}
-            isStreaming={isStreaming}
-            onSelectPrompt={(prompt) => void handleSend(prompt)}
-          />
-
-          {chatError && (
-            <div style={{ maxWidth: 780, width: '100%', margin: '0 auto 6px', padding: '0 20px' }}>
-              <div className="error-banner" style={{ marginTop: 0 }}>
-                {chatError}
-              </div>
-            </div>
-          )}
-
-          <Composer
-            diagnostic={session.diagnostic}
-            activeTopicTitle={session.learning.activeTopicTitle}
-            hasPendingCheckIn={session.learning.pendingCheckIn.length > 0}
-            provider={provider}
-            observedFilesCount={session.observedFilesCount}
-            observedCommitsCount={session.observedCommitsCount}
-            disabled={isStreaming}
-            streamingText={streamingText}
-            streamingActivities={streamingActivities}
-            streamingVisuals={streamingVisuals}
-            onSend={(prompt) => void handleSend(prompt)}
-          />
+          </div>
         </>
       )}
 
