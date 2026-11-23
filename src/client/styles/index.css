@@ -538,10 +538,91 @@ pre {
 }
 
 /* Chat area */
+.chat-scroll-region {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .chat-scroll {
   flex: 1;
   overflow-y: auto;
   padding: 28px 20px 24px;
+}
+
+.scroll-down-cue-anchor {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 14px;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 15;
+}
+
+.scroll-down-cue {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-weight: 550;
+  letter-spacing: -0.008em;
+  box-shadow:
+    0 4px 14px rgba(15, 23, 42, 0.1),
+    0 1px 3px rgba(15, 23, 42, 0.06);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.scroll-down-cue:hover {
+  background: var(--bg-page);
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow:
+    0 6px 18px rgba(26, 115, 232, 0.16),
+    0 2px 5px rgba(15, 23, 42, 0.08);
+}
+
+.scroll-down-cue:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.scroll-down-cue.is-streaming {
+  border-color: rgba(26, 115, 232, 0.45);
+  background: rgba(244, 248, 255, 0.96);
+  color: var(--accent);
+}
+
+.scroll-down-cue-icon {
+  flex-shrink: 0;
+  animation: scroll-cue-bob 1.5s ease-in-out infinite;
+}
+
+@keyframes scroll-cue-bob {
+  0%,
+  100% {
+    transform: translateY(-1px);
+  }
+  50% {
+    transform: translateY(2px);
+  }
 }
 
 .chat-stream {
@@ -4520,6 +4601,27 @@ pre {
 
 :root[data-theme='dark'] .composer-dock {
   background: linear-gradient(180deg, rgba(15, 20, 28, 0) 0%, var(--bg-page) 28%);
+}
+
+:root[data-theme='dark'] .scroll-down-cue {
+  background: rgba(22, 29, 41, 0.94);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.38),
+    0 1px 4px rgba(0, 0, 0, 0.24);
+}
+
+:root[data-theme='dark'] .scroll-down-cue:hover {
+  background: var(--bg-surface);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+:root[data-theme='dark'] .scroll-down-cue.is-streaming {
+  background: rgba(30, 44, 68, 0.95);
+  border-color: rgba(96, 165, 250, 0.5);
+  color: var(--accent);
 }
 
 :root[data-theme='dark'] .composer-box.is-working {

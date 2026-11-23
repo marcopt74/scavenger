@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { ArrowDown } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ONBOARDING_STAGES } from '../../shared/types';
 import type { ChatMessage, ToolActivity, VisualArtifact } from '../../shared/types';
 import { ConceptVisualCard } from './ConceptVisualCard';
@@ -6,6 +7,25 @@ import { DiagramCard } from './DiagramCard';
 import { LessonFooter } from './LessonFooter';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { ToolActivityPill } from './ToolActivityPill';
+
+export const SCROLL_BOTTOM_THRESHOLD_PX = 24;
+
+export interface ScrollMetrics {
+  scrollTop: number;
+  scrollHeight: number;
+  clientHeight: number;
+}
+
+export function hasUnseenContentBelow(
+  metrics: ScrollMetrics,
+  thresholdPx: number = SCROLL_BOTTOM_THRESHOLD_PX
+): boolean {
+  if (metrics.scrollHeight <= 0 || metrics.clientHeight <= 0) {
+    return false;
+  }
+  const distanceFromBottom = metrics.scrollHeight - metrics.scrollTop - metrics.clientHeight;
+  return distanceFromBottom > thresholdPx;
+}
 
 interface ChatMessageListProps {
   messages: ChatMessage[];
@@ -15,6 +35,7 @@ interface ChatMessageListProps {
   streamingVisuals: VisualArtifact[];
   isStreaming: boolean;
   onSelectPrompt: (prompt: string) => void;
+  initialHasMoreBelow?: boolean;
 }
 
 export function ChatMessageList({
@@ -25,85 +46,165 @@ export function ChatMessageList({
   streamingVisuals,
   isStreaming,
   onSelectPrompt,
+  initialHasMoreBelow = false,
 }: ChatMessageListProps) {
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLElement>(null);
+  const streamContentRef = useRef<HTMLDivElement>(null);
+  const [hasMoreBelow, setHasMoreBelow] = useState<boolean>(initialHasMoreBelow);
+
+  const updateScrollCue = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    setHasMoreBelow(
+      hasUnseenContentBelow({
+        scrollTop: el.scrollTop,
+        scrollHeight: el.scrollHeight,
+        clientHeight: el.clientHeight,
+      })
+    );
+  }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages.length, streamingText, streamingVisuals.length, streamingActivities.length]);
+    updateScrollCue();
+  }, [
+    updateScrollCue,
+    messages.length,
+    streamingText,
+    streamingVisuals.length,
+    streamingActivities.length,
+    isStreaming,
+  ]);
+
+  useEffect(() => {
+    const scrollEl = scrollContainerRef.current;
+    const streamEl = streamContentRef.current;
+    if (!scrollEl) return;
+
+    updateScrollCue();
+    window.addEventListener('resize', updateScrollCue);
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(() => {
+        updateScrollCue();
+      });
+      observer.observe(scrollEl);
+      if (streamEl) {
+        observer.observe(streamEl);
+      }
+      return () => {
+        observer.disconnect();
+        window.removeEventListener('resize', updateScrollCue);
+      };
+    }
+
+    return () => {
+      window.removeEventListener('resize', updateScrollCue);
+    };
+  }, [updateScrollCue]);
+
+  const handleScrollToBottom = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  }, []);
 
   return (
-    <main className="chat-scroll">
-      <div className="chat-stream">
-        {messages.map((msg, idx) => {
-          const isLatestAssistant =
-            msg.role === 'assistant' && idx === messages.length - 1 && !isStreaming;
-          const label = msg.topicTitle || ONBOARDING_STAGES[msg.stage]?.title || 'Lesson';
+    <div className="chat-scroll-region">
+      <main
+        ref={scrollContainerRef}
+        className="chat-scroll"
+        onScroll={updateScrollCue}
+      >
+        <div ref={streamContentRef} className="chat-stream">
+          {messages.map((msg, idx) => {
+            const isLatestAssistant =
+              msg.role === 'assistant' && idx === messages.length - 1 && !isStreaming;
+            const label = msg.topicTitle || ONBOARDING_STAGES[msg.stage]?.title || 'Lesson';
 
-          return (
-            <div key={msg.id} className={`msg-row ${msg.role}`}>
-              {msg.role === 'user' ? (
-                <div className="user-bubble">{msg.content}</div>
-              ) : (
-                <article className="assistant-turn">
-                  <div className="assistant-header">
-                    <span className="assistant-avatar">S</span>
-                    <span>{label}</span>
-                  </div>
+            return (
+              <div key={msg.id} className={`msg-row ${msg.role}`}>
+                {msg.role === 'user' ? (
+                  <div className="user-bubble">{msg.content}</div>
+                ) : (
+                  <article className="assistant-turn">
+                    <div className="assistant-header">
+                      <span className="assistant-avatar">S</span>
+                      <span>{label}</span>
+                    </div>
 
-                  {msg.toolActivities && msg.toolActivities.length > 0 && (
-                    <ToolActivityPill activities={msg.toolActivities} />
-                  )}
+                    {msg.toolActivities && msg.toolActivities.length > 0 && (
+                      <ToolActivityPill activities={msg.toolActivities} />
+                    )}
 
-                  {msg.visuals && msg.visuals.length > 0 && (
-                    <VisualStack visuals={msg.visuals} />
-                  )}
+                    {msg.visuals && msg.visuals.length > 0 && (
+                      <VisualStack visuals={msg.visuals} />
+                    )}
 
-                  <MarkdownRenderer content={msg.content} />
+                    <MarkdownRenderer content={msg.content} />
 
-                  <LessonFooter
-                    checkInQuestions={msg.checkInQuestions}
-                    suggestedNextSteps={msg.suggestedNextSteps}
-                    isLatest={isLatestAssistant}
-                    disabled={isStreaming}
-                    onSelectStep={onSelectPrompt}
-                  />
-                </article>
-              )}
-            </div>
-          );
-        })}
-
-        {isStreaming && (
-          <div className="msg-row assistant">
-            <article className="assistant-turn">
-              <div className="assistant-header">
-                <span className="assistant-avatar">S</span>
-                <span>{activeTopicTitle || 'Analyzing repository…'}</span>
+                    <LessonFooter
+                      checkInQuestions={msg.checkInQuestions}
+                      suggestedNextSteps={msg.suggestedNextSteps}
+                      isLatest={isLatestAssistant}
+                      disabled={isStreaming}
+                      onSelectStep={onSelectPrompt}
+                    />
+                  </article>
+                )}
               </div>
+            );
+          })}
 
-              {streamingActivities.length > 0 && (
-                <ToolActivityPill activities={streamingActivities} />
-              )}
-
-              {streamingVisuals.length > 0 && (
-                <VisualStack visuals={streamingVisuals} />
-              )}
-
-              {streamingText ? (
-                <MarkdownRenderer content={streamingText} isStreaming />
-              ) : (
-                <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
-                  Preparing grounded response<span className="streaming-cursor" />
+          {isStreaming && (
+            <div className="msg-row assistant">
+              <article className="assistant-turn">
+                <div className="assistant-header">
+                  <span className="assistant-avatar">S</span>
+                  <span>{activeTopicTitle || 'Analyzing repository…'}</span>
                 </div>
-              )}
-            </article>
-          </div>
-        )}
 
-        <div ref={bottomRef} />
-      </div>
-    </main>
+                {streamingActivities.length > 0 && (
+                  <ToolActivityPill activities={streamingActivities} />
+                )}
+
+                {streamingVisuals.length > 0 && (
+                  <VisualStack visuals={streamingVisuals} />
+                )}
+
+                {streamingText ? (
+                  <MarkdownRenderer content={streamingText} isStreaming />
+                ) : (
+                  <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
+                    Preparing grounded response<span className="streaming-cursor" />
+                  </div>
+                )}
+              </article>
+            </div>
+          )}
+        </div>
+      </main>
+
+      {hasMoreBelow && (
+        <div className="scroll-down-cue-anchor">
+          <button
+            type="button"
+            className={`scroll-down-cue${isStreaming ? ' is-streaming' : ''}`}
+            onClick={handleScrollToBottom}
+            aria-label={
+              isStreaming
+                ? 'New output below — scroll down to view'
+                : 'More content below — scroll down to view'
+            }
+            title="Scroll to bottom"
+          >
+            <ArrowDown size={16} className="scroll-down-cue-icon" aria-hidden="true" />
+            <span className="scroll-down-cue-label">
+              {isStreaming ? 'New output below' : 'More content below'}
+            </span>
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
