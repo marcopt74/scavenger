@@ -203,7 +203,7 @@ function buildStage0OpeningMessage(recon: RootReconSummary): string {
     '',
     `From the first glance, this looks like a **${stackPhrase}** repository. ${layoutSentence} ${gitSentence}`,
     '',
-    `Think of this session like a pair of engineers at a whiteboard: we'll start from clear mental models and work our way into how pieces depend on one another, how they behave over time, and the subtle details that usually trip newcomers up.`,
+    `Think of this session like a pair of engineers at a whiteboard: ==we'll start from clear mental models and work our way into how pieces depend on one another, how they behave over time, and the subtle details that usually trip newcomers up==.`,
     '',
     `Before I shape our first lesson, tell me a little about where you're starting from *(or skip straight ahead by clicking a topic below or naming anything you want to learn first)*:`,
     '',

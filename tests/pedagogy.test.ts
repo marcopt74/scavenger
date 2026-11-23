@@ -34,6 +34,8 @@ describe('pedagogy (Whiteboard Mentor lesson craft & dynamic progression)', () =
     expect(section).toContain('Interactions Over Time');
     expect(section).toContain('Subtle behavior to notice');
     expect(section).toContain('Mental model to keep');
+    expect(section).toContain('Yellow Highlighter for Key Ideas');
+    expect(section).toContain('==');
     expect(section).toContain('Never emit dry file-inventory bullet soup');
     expect(section).toContain('300–500 words');
     expect(section).toContain('predictive, causal, or boundary-reasoning questions');
@@ -60,7 +62,9 @@ describe('pedagogy (Whiteboard Mentor lesson craft & dynamic progression)', () =
 
     expect(prompt).toContain('The Whiteboard Mentor Method');
     expect(prompt).toContain('2–3 interacting files');
+    expect(prompt).toContain('yellow highlighter');
     expect(session.messages[0].content).toContain('Welcome aboard!');
     expect(session.messages[0].content).toContain('whiteboard');
+    expect(session.messages[0].content).toContain('==');
   });
 });

@@ -1,5 +1,6 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { remarkHighlighter } from '../utils/highlightMarkdown';
 import { DiagramCard } from './DiagramCard';
 
 interface MarkdownRendererProps {
@@ -8,13 +9,14 @@ interface MarkdownRendererProps {
 
 /**
  * Renders Markdown cleanly while intercepting any fenced `mermaid` or `d2` blocks
- * and displaying them visually as SVG DiagramCards rather than raw diagram syntax.
+ * and displaying them visually as SVG DiagramCards rather than raw diagram syntax,
+ * and rendering `==...==` (plus smart fallback insights) with a realistic yellow highlighter effect.
  */
 export function MarkdownRenderer({ content }: MarkdownRendererProps) {
   return (
     <div className="prose">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkHighlighter]}
         components={{
           pre({ children }) {
             // Check if the child code element is a mermaid or d2 block

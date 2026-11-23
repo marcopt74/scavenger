@@ -357,22 +357,22 @@ async function buildCustomTopicLesson(
 
   const hookParagraph =
     level === 'foundational'
-      ? `Think of **${cleanTitle}** not as a lone file sitting in isolation, but as a dedicated specialist on the team. Whenever a codebase grows past a handful of scripts, mixing every concern together makes tiny changes ripple unpredictably. Here in \`${session.repoName}\`, that responsibility is anchored in ${primaryFile ? `\`${primaryFile}\` (${primaryTotalLines} lines)` : 'its core module boundary'} so the rest of the system can rely on one clear contract.`
+      ? `Think of **${cleanTitle}** not as a lone file sitting in isolation, but as a dedicated specialist on the team. Whenever a codebase grows past a handful of scripts, ==mixing every concern together makes tiny changes ripple unpredictably==. Here in \`${session.repoName}\`, that responsibility is anchored in ${primaryFile ? `\`${primaryFile}\` (${primaryTotalLines} lines)` : 'its core module boundary'} so the rest of the system can rely on one clear contract.`
       : level === 'advanced'
-        ? `Rather than treating **${cleanTitle}** as a static symbol lookup, look at the invariant boundary it enforces inside \`${session.repoName}\`. Its primary anchor sits in ${primaryFile ? `\`${primaryFile}\` (${primaryTotalLines} lines)` : 'the root codebase'}, exposing ${primarySymbols.length > 0 ? primarySymbols.slice(0, 4).map((s) => `\`${s}\``).join(', ') : 'focused internal entry points'} so upstream callers stay decoupled from lower-level mechanics.`
-        : `To understand **${cleanTitle}** deeply in \`${session.repoName}\`, start with the job it isolates. Its main anchor is ${primaryFile ? `\`${primaryFile}\` (${primaryTotalLines} lines)` : 'the top-level module'}, where ${primarySymbols.length > 0 ? `symbols like ${primarySymbols.slice(0, 3).map((s) => `\`${s}\``).join(', ')}` : 'its core functions'} give the rest of the repository a clean seam to call into.`;
+        ? `Rather than treating **${cleanTitle}** as a static symbol lookup, look at the invariant boundary it enforces inside \`${session.repoName}\`. Its primary anchor sits in ${primaryFile ? `\`${primaryFile}\` (${primaryTotalLines} lines)` : 'the root codebase'}, exposing ${primarySymbols.length > 0 ? primarySymbols.slice(0, 4).map((s) => `\`${s}\``).join(', ') : 'focused internal entry points'} so ==upstream callers stay decoupled from lower-level mechanics==.`
+        : `To understand **${cleanTitle}** deeply in \`${session.repoName}\`, start with the job it isolates. Its main anchor is ${primaryFile ? `\`${primaryFile}\` (${primaryTotalLines} lines)` : 'the top-level module'}, where ${primarySymbols.length > 0 ? `symbols like ${primarySymbols.slice(0, 3).map((s) => `\`${s}\``).join(', ')}` : 'its core functions'} ==give the rest of the repository a clean seam to call into==.`;
 
   const interdependencyParagraph = secondaryFile
-    ? `Now look at the arrows in the diagram above—this is where **interdependencies** start to matter. \`${primaryFile}\` does not act alone: it collaborates closely with \`${secondaryFile}\`${secondarySymbols.length > 0 ? ` (around ${secondarySymbols.slice(0, 2).map((s) => `\`${s}\``).join(' and ')})` : ''}${primaryImports.length > 0 ? ` and pulls in contracts from ${primaryImports.slice(0, 3).map((i) => `\`${i}\``).join(', ')}` : ''}. Because responsibilities are split across that boundary, changing how inputs are validated or shaped on one side immediately affects what the other side can safely assume.`
-    : `Even when a concern centers on a single file like \`${primaryFile ?? '.'}\`, notice what it depends on${primaryImports.length > 0 ? ` (${primaryImports.slice(0, 3).map((i) => `\`${i}\``).join(', ')})` : ''} and who depends on it (${grepRes.matches.length} references found across \`${grepRes.filesSearched}\` scanned files). Those inbound and outbound links are the real coupling lines you feel when refactoring.`;
+    ? `Now look at the arrows in the diagram above—this is where **interdependencies** start to matter. \`${primaryFile}\` does not act alone: it collaborates closely with \`${secondaryFile}\`${secondarySymbols.length > 0 ? ` (around ${secondarySymbols.length > 0 ? secondarySymbols.slice(0, 2).map((s) => `\`${s}\``).join(' and ') : ''})` : ''}${primaryImports.length > 0 ? ` and pulls in contracts from ${primaryImports.slice(0, 3).map((i) => `\`${i}\``).join(', ')}` : ''}. Because responsibilities are split across that boundary, ==changing how inputs are validated on one side immediately affects what the other side can safely assume==.`
+    : `Even when a concern centers on a single file like \`${primaryFile ?? '.'}\`, notice what it depends on${primaryImports.length > 0 ? ` (${primaryImports.slice(0, 3).map((i) => `\`${i}\``).join(', ')})` : ''} and who depends on it (${grepRes.matches.length} references found across \`${grepRes.filesSearched}\` scanned files). ==Those inbound and outbound links are the real coupling lines you feel when refactoring==.`;
 
   const overTimeParagraph = `Trace how this behaves **over time** during a real run: first, an upstream trigger hands raw input into ${primaryFile ? `\`${primaryFile}\`` : 'this layer'} before any downstream work starts. Next, ${primarySymbols[0] ? `\`${primarySymbols[0]}\`` : 'the entry routine'} evaluates or transforms that input and either hands a structured result forward${secondaryFile ? ` to \`${secondaryFile}\`` : ''} or rejects invalid states early. Finally, the result propagates back up to the caller, leaving the rest of the pipeline confident that the contract held throughout the lifecycle.`;
 
   const subtleNote = secondaryFile
-    ? `> **Subtle behavior to notice:** Because \`${primaryFile}\` and \`${secondaryFile}\` share responsibility for **${cleanTitle}**, a change that looks harmless inside one file can quietly break an implicit ordering assumption in the other. Always check both sides of that seam (and any callers surfaced by \`grep_search\`) before modifying behavior.`
-    : `> **Subtle behavior to notice:** Look closely at the boundary at the top of \`${primaryFile ?? '.'}\`—enforcing checks at the earliest entry point prevents downstream code from ever having to guess whether inputs were already normalized or validated.`;
+    ? `> **Subtle behavior to notice:** Because \`${primaryFile}\` and \`${secondaryFile}\` share responsibility for **${cleanTitle}**, ==a change that looks harmless inside one file can quietly break an implicit ordering assumption in the other==. Always check both sides of that seam (and any callers surfaced by \`grep_search\`) before modifying behavior.`
+    : `> **Subtle behavior to notice:** Look closely at the boundary at the top of \`${primaryFile ?? '.'}\`—==enforcing checks at the earliest entry point prevents downstream code from guessing whether inputs were already validated==.`;
 
-  const takeaway = `> **Mental model to keep:** Treat **${cleanTitle}** as a contract boundary anchored in \`${primaryFile ?? session.repoName}\`—understand what crosses *into* it and what guarantees come *out* of it before worrying about every line inside.`;
+  const takeaway = `> **Mental model to keep:** ==Treat **${cleanTitle}** as a contract boundary anchored in \`${primaryFile ?? session.repoName}\`==—understand what crosses *into* it and what guarantees come *out* of it before worrying about every line inside.`;
 
   return {
     text: [
@@ -472,9 +472,9 @@ async function buildReinforcementLesson(
       '',
       `Look at the three boxes in the concept map above. Whenever something happens in **${topicTitle}**, the story unfolds in the same predictable rhythm over time: first, an incoming request arrives at the **Entry Gate**, where messy real-world input gets checked before anything else touches it. Second, the middle layer does one focused transformation without having to worry about how the UI or network talks to the outside world. Third, a clean, structured result comes back out so the caller knows exactly what changed. ${anchor}`,
       '',
-      `> **Subtle behavior to notice:** The reason engineers separate these three steps isn't ceremony—it's because time and failure happen *between* steps. If step 1 rejects bad input early, step 2 never corrupts state halfway through.`,
+      `> **Subtle behavior to notice:** The reason engineers separate these three steps isn't ceremony—it's because ==time and failure happen *between* steps==. If step 1 rejects bad input early, step 2 never corrupts state halfway through.`,
       '',
-      `> **Mental model to keep:** Don't memorize files—track the baton. Ask: *what enters, what single rule transforms it, and what guarantee leaves?*`,
+      `> **Mental model to keep:** ==Don't memorize files—track the baton.== Ask: *what enters, what single rule transforms it, and what guarantee leaves?*`,
     ].join('\n'),
     checkIns: [
       {
@@ -580,11 +580,11 @@ async function buildPillarLesson(
         `#### The First Boundary That Matters`,
         framing,
         '',
-        `Notice how those pieces depend on one another as soon as you boot or change the project: root manifests decide which packages, compilers, and test runners wake up first, and only *after* that shell is wired does control flow into ${dirs[0] ? `\`${dirs[0]}/\`` : 'the main implementation'}. In other words, root configuration isn't passive paperwork—it actively defines the rules under which every downstream module runs.`,
+        `Notice how those pieces depend on one another as soon as you boot or change the project: root manifests decide which packages, compilers, and test runners wake up first, and only *after* that shell is wired does control flow into ${dirs[0] ? `\`${dirs[0]}/\`` : 'the main implementation'}. In other words, ==root configuration actively defines the rules under which every downstream module runs==.`,
         '',
-        `> **Subtle behavior to notice:** Many newcomers jump straight into deep source files and get confused by imports, path aliases, or runtime assumptions that are actually governed by root manifests like ${manifests[0] ? `\`${manifests[0]}\`` : 'the root config'}. Reading the root contracts first saves hours of mystery later.`,
+        `> **Subtle behavior to notice:** Many newcomers jump straight into deep source files and get confused by imports, path aliases, or runtime assumptions that are actually governed by root manifests like ${manifests[0] ? `\`${manifests[0]}\`` : 'the root config'}. ==Reading the root contracts first saves hours of mystery later.==`,
         '',
-        `> **Mental model to keep:** Root files set the **rules of engagement** (${recon.detectedStack.slice(0, 3).join(', ') || 'toolchain & build'}); top-level folders carry the **domain behavior** that operates inside those rules.`,
+        `> **Mental model to keep:** ==Root files set the **rules of engagement**== (${recon.detectedStack.slice(0, 3).join(', ') || 'toolchain & build'}); ==top-level folders carry the **domain behavior** that operates inside those rules.==`,
       ].join('\n'),
       checkIns: [
         {
@@ -725,9 +725,9 @@ async function buildPillarLesson(
         '',
         `When a feature runs over time, execution typically enters through an outer shell, crosses into the core modules inside ${firstDir ? `\`${firstDir}/\`` : 'the primary source directory'}, and relies on shared definitions so both sides agree on data shapes. If you ever need to trace a bug, start at the boundary where external input enters and follow the dependency arrows inward.`,
         '',
-        `> **Subtle behavior to notice:** Folder structure shows *intended* architecture, while actual imports show *real* coupling. Whenever two sibling modules start importing from each other in both directions, subtle initialization order bugs and painful refactors appear—that's why spotting shared contract layers early is so valuable.`,
+        `> **Subtle behavior to notice:** ==Folder structure shows *intended* architecture, while actual imports show *real* coupling.== Whenever two sibling modules start importing from each other in both directions, subtle initialization order bugs and painful refactors appear—that's why spotting shared contract layers early is so valuable.`,
         '',
-        `> **Mental model to keep:** Read the diagram as **layers of stability**—outer modules handle changing inputs and presentation, while inner modules guard core rules and invariants.`,
+        `> **Mental model to keep:** ==Read the diagram as **layers of stability**==—outer modules handle changing inputs and presentation, while inner modules guard core rules and invariants.`,
       ].join('\n'),
       checkIns: [
         {
@@ -865,9 +865,9 @@ async function buildPillarLesson(
         `#### Step-by-Step Timeline`,
         `${symbolStory} first, an external trigger enters \`${inspectedPath}\` at the boundary. Before heavy work starts, the entry layer establishes context and hands validated inputs to its collaborators. While that delegated work runs, state transitions happen inside focused modules rather than leaking everywhere—and only when the result settles does control return to the caller.`,
         '',
-        `> **Subtle behavior to notice:** Pay attention to the *order* of steps 2–5 in the sequence diagram above. Whenever async work or streaming is involved, returning before downstream promises settle—or mutating shared state before validation finishes—creates race conditions that look completely invisible when reading files statically.`,
+        `> **Subtle behavior to notice:** Pay attention to the *order* of steps 2–5 in the sequence diagram above. Whenever async work or streaming is involved, ==returning before downstream promises settle or mutating state before validation finishes creates invisible race conditions==.`,
         '',
-        `> **Mental model to keep:** \`${inspectedPath}\` is the **choreographer**—follow what it validates first, who it delegates to next, and how failures return to the caller.`,
+        `> **Mental model to keep:** ==\`${inspectedPath}\` is the **choreographer**==—follow what it validates first, who it delegates to next, and how failures return to the caller.`,
       ].join('\n'),
       checkIns: [
         {
@@ -992,11 +992,11 @@ async function buildPillarLesson(
       `Codebases aren't designed all at once—they accumulate safeguards, refactors, and conventions in response to real friction. ${gitNarrative}`,
       '',
       `#### Turning History Into Your Next Reading Path`,
-      `${filesStory} Notice how files that change together across commits reveal **hidden interdependencies**: even when two modules don't import each other directly, changing together in git history signals a shared contract (like a backend SSE frame shape and the frontend parser that reads it).`,
+      `${filesStory} Notice how ==files that change together across commits reveal **hidden interdependencies**==: even when two modules don't import each other directly, changing together in git history signals a shared contract (like a backend SSE frame shape and the frontend parser that reads it).`,
       '',
-      `> **Subtle behavior to notice:** High-churn files are rarely "bad code"—they're usually where product requirements evolve fastest or where edge cases were discovered in production. Reading their commit messages before editing protects you from accidentally re-introducing a bug that was already solved.`,
+      `> **Subtle behavior to notice:** High-churn files are rarely "bad code"—they're usually where product requirements evolve fastest or where edge cases were discovered in production. ==Reading their commit messages before editing protects you from re-introducing a solved bug.==`,
       '',
-      `> **Mental model to keep:** Code shows *what* the system does today; git history reveals *why* the guardrails and boundaries were put there.`,
+      `> **Mental model to keep:** ==Code shows *what* the system does today; git history reveals *why* the guardrails and boundaries were put there.==`,
     ].join('\n'),
     checkIns: [
       {
