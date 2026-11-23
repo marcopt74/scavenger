@@ -29,6 +29,8 @@ export const DEFAULT_IGNORED_DIRS = new Set([
   '.pnpm-store',
   '.idea',
   '.vscode',
+  '.scavenger',
+  '.scavenger-knowledge',
 ]);
 
 export const MAX_READ_BYTES = 256 * 1024; // 256 KB per file read

@@ -14,12 +14,14 @@ import type {
   VisualArtifact,
 } from '../../shared/types.js';
 import { GuardrailViolationError } from '../guardrails/pathGuard.js';
+import { queryKnowledgeMap, scanOrRefreshRepoKnowledge } from '../knowledge/scannerAgent.js';
 import {
   cloneLearningState,
   setCheckInQuestions,
   setSuggestedNextSteps,
   upsertTopicMastery,
 } from '../session/learningEngine.js';
+import { updateSessionKnowledge } from '../session/sessionStore.js';
 import type { InternalSession } from '../session/sessionStore.js';
 import { mergeDiagnosticProfile } from '../session/stageMachine.js';
 import { grepSearch, listTree, readFileSlice } from './fsTools.js';
@@ -47,6 +49,7 @@ export function createAgentTools(session: InternalSession, ctx: ToolContextCallb
       completedStages: [...session.completedStages].sort((a, b) => a - b),
       diagnostic: { ...session.diagnostic },
       learning: cloneLearningState(session.learning),
+      knowledgeStatus: session.knowledgeStatus ? { ...session.knowledgeStatus } : undefined,
       observedFilesCount: session.observedFiles.size,
       observedCommitsCount: session.observedCommits.size,
     });
@@ -87,6 +90,39 @@ export function createAgentTools(session: InternalSession, ctx: ToolContextCallb
   }
 
   return {
+    query_knowledge_map: tool({
+      description:
+        'Instantly query the pre-scanned Repository Knowledge Map in memory (modules, exported symbols with exact line numbers, file imports/dependents, entry points, and core execution flows). Prefer calling this first before running exploratory list_tree or grep_search calls—only use read_file when you need to inspect line-by-line implementation details.',
+      inputSchema: z.object({
+        queryType: z
+          .enum(['overview', 'module', 'symbol', 'file', 'dependents', 'flow'])
+          .describe(
+            'What to look up in the Knowledge Map: "overview" (high-level modules & flows), "module" (files & exports in a module), "symbol" (locate exported function/class/type/const with line numbers), "file" (file metadata, exports & imports), "dependents" (incoming/outgoing dependency edges), or "flow" (core execution flows).'
+          ),
+        target: z
+          .string()
+          .optional()
+          .describe('Optional module id, symbol name, file path substring, or flow name to filter by.'),
+      }),
+      execute: async ({ queryType, target }) =>
+        runTracked(
+          'query_knowledge_map',
+          `Queried Knowledge Map (${queryType}${target ? `: "${target}"` : ''})`,
+          target || queryType,
+          async () => {
+            if (!session.knowledgeMap) {
+              const scanned = await scanOrRefreshRepoKnowledge(session.repoPath, {
+                recon: session.rootRecon,
+                provider: session.provider,
+                skipLlmSynthesis: true,
+              });
+              updateSessionKnowledge(session, scanned.knowledgeMap, scanned.status);
+            }
+            return queryKnowledgeMap(session.knowledgeMap!, { queryType, target });
+          }
+        ),
+    }),
+
     list_tree: tool({
       description:
         'List files and directories inside the target repository (read-only, bounded depth). Always stay scoped inside the repo.',

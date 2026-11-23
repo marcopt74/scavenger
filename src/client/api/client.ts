@@ -4,10 +4,12 @@ import type {
   CopilotModelsResponse,
   DirectoryBrowseResponse,
   HealthInfo,
+  KnowledgeBaseStatus,
   OnboardingStage,
   ProviderSelection,
   PublicSettings,
   SSEEvent,
+  ScanSSEEvent,
   SessionPublicState,
   TestConnectionPayload,
   TestConnectionResult,
@@ -161,6 +163,149 @@ export async function createSession(
     throw new Error(data.error || `Failed to start session (${res.status})`);
   }
   return data.session;
+}
+
+export async function streamSessionInit(
+  repoPath: string,
+  onEvent: (event: ScanSSEEvent) => void,
+  provider?: ProviderSelection
+): Promise<SessionPublicState> {
+  const res = await fetch('/api/sessions/stream-init', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repoPath, provider }),
+  });
+
+  if (!res.ok || !res.body) {
+    let errText = `Failed to initialize repository session (${res.status})`;
+    try {
+      const json = (await res.json()) as { error?: string };
+      if (json.error) errText = json.error;
+    } catch {
+      // ignore
+    }
+    throw new Error(errText);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let completedSession: SessionPublicState | null = null;
+  let streamError: string | null = null;
+
+  const dispatchFrame = (rawFrame: string) => {
+    const dataLines = rawFrame
+      .split('\n')
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice(5).trim());
+
+    if (dataLines.length === 0) return;
+    const payload = dataLines.join('\n');
+    try {
+      const parsed = JSON.parse(payload) as ScanSSEEvent;
+      onEvent(parsed);
+      if (parsed.type === 'scan-complete') {
+        completedSession = parsed.session;
+      } else if (parsed.type === 'scan-error') {
+        streamError = parsed.error;
+      }
+    } catch {
+      // Ignore malformed frame
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+
+    const frames = buffer.split('\n\n');
+    buffer = frames.pop() ?? '';
+
+    for (const frame of frames) {
+      dispatchFrame(frame);
+    }
+  }
+
+  buffer += decoder.decode().replace(/\r\n/g, '\n');
+  if (buffer.trim()) {
+    for (const frame of buffer.split('\n\n')) {
+      dispatchFrame(frame);
+    }
+  }
+
+  if (streamError) {
+    throw new Error(streamError);
+  }
+  if (!completedSession) {
+    return createSession(repoPath, provider);
+  }
+  return completedSession;
+}
+
+export async function checkSessionKnowledgeStatus(
+  sessionId: string,
+  autoRefresh = true
+): Promise<{
+  session: SessionPublicState;
+  knowledgeStatus?: KnowledgeBaseStatus;
+  refreshed: boolean;
+  changedFilesCount: number;
+  commitsBehind: number;
+}> {
+  const res = await fetch(
+    `/api/sessions/${encodeURIComponent(sessionId)}/knowledge?autoRefresh=${autoRefresh ? 'true' : 'false'}`
+  );
+  const data = (await res.json()) as {
+    session?: SessionPublicState;
+    knowledgeStatus?: KnowledgeBaseStatus;
+    refreshed?: boolean;
+    changedFilesCount?: number;
+    commitsBehind?: number;
+    error?: string;
+  };
+  if (!res.ok || !data.session) {
+    throw new Error(data.error || `Failed to check knowledge status (${res.status})`);
+  }
+  return {
+    session: data.session,
+    knowledgeStatus: data.knowledgeStatus,
+    refreshed: Boolean(data.refreshed),
+    changedFilesCount: data.changedFilesCount ?? 0,
+    commitsBehind: data.commitsBehind ?? 0,
+  };
+}
+
+export async function refreshSessionKnowledge(
+  sessionId: string,
+  mode: 'full' | 'incremental' = 'full'
+): Promise<{
+  session: SessionPublicState;
+  knowledgeStatus?: KnowledgeBaseStatus;
+  refreshed: boolean;
+  changedFilesCount: number;
+}> {
+  const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/knowledge/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode }),
+  });
+  const data = (await res.json()) as {
+    session?: SessionPublicState;
+    knowledgeStatus?: KnowledgeBaseStatus;
+    refreshed?: boolean;
+    changedFilesCount?: number;
+    error?: string;
+  };
+  if (!res.ok || !data.session) {
+    throw new Error(data.error || `Failed to refresh knowledge base (${res.status})`);
+  }
+  return {
+    session: data.session,
+    knowledgeStatus: data.knowledgeStatus,
+    refreshed: Boolean(data.refreshed),
+    changedFilesCount: data.changedFilesCount ?? 0,
+  };
 }
 
 export async function patchSession(

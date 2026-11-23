@@ -6,7 +6,7 @@ node_modules/
 dist/
 coverage/
 
-# Environment & secrets
+# Environment, secrets & local knowledge bases (NEVER commit or push)
 .env
 .env.*
 !.env.example
@@ -16,6 +16,11 @@ coverage/
 *.p12
 *.pfx
 .scavenger/
+**/.scavenger/
+.scavenger-knowledge/
+**/.scavenger-knowledge/
+/knowledge/
+**/knowledge-map*.json
 
 # Editor swap/backup & OS files
 *.swp

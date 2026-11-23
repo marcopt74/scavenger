@@ -1,4 +1,14 @@
-import { Check, ChevronDown, FolderGit2, Lock, Map as MapIcon, Plus, Settings2 } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  Database,
+  FolderGit2,
+  Lock,
+  Map as MapIcon,
+  Plus,
+  RefreshCw,
+  Settings2,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { ONBOARDING_STAGES } from '../../shared/types';
 import type {
@@ -12,8 +22,11 @@ import type {
 interface StageProgressBarProps {
   session: SessionPublicState;
   disabled: boolean;
+  refreshingKnowledge?: boolean;
   onSelectPillar: (pillarId: CorePillarId, title: string) => void;
   onSelectTopic: (topic: LearningTopic) => void;
+  onSelectModule?: (moduleId: string) => void;
+  onRefreshKnowledge?: () => void;
   onChangeLevel: (level: UserLevel) => void;
   onOpenSettings: () => void;
   onResetSession: () => void;
@@ -47,8 +60,11 @@ const MASTERY_LABELS: Record<TopicMastery, string> = {
 export function StageProgressBar({
   session,
   disabled,
+  refreshingKnowledge = false,
   onSelectPillar,
   onSelectTopic,
+  onSelectModule,
+  onRefreshKnowledge,
   onChangeLevel,
   onOpenSettings,
   onResetSession,
@@ -76,6 +92,8 @@ export function StageProgressBar({
   const pillarTopics = learning.topics.filter((t) => t.kind === 'pillar');
   const customTopics = learning.topics.filter((t) => t.kind === 'custom');
   const exploredCount = learning.topics.filter((t) => t.mastery !== 'unexplored').length;
+  const kb = session.knowledgeStatus;
+  const kbModules = kb?.modules ?? [];
 
   const currentLevelLabel =
     session.diagnostic.inferredLevel === 'uncalibrated'
@@ -122,6 +140,29 @@ export function StageProgressBar({
       </nav>
 
       <div className="topbar-right">
+        {onRefreshKnowledge && (
+          <button
+            type="button"
+            className={`chip-button kb-refresh-chip ${kb?.isStale ? 'is-stale' : ''}`}
+            disabled={disabled || refreshingKnowledge}
+            onClick={onRefreshKnowledge}
+            title={
+              kb?.stats
+                ? `Repo Knowledge Base: ${kb.stats.indexedFiles} files, ${kb.stats.totalModules} modules, ${kb.stats.totalSymbols} symbols${kb.headCommit ? ` @ ${kb.headCommit.slice(0, 7)}` : ''} — Click to refresh`
+                : 'Refresh Repository Knowledge Base'
+            }
+          >
+            <RefreshCw size={12} className={refreshingKnowledge ? 'spin-icon' : ''} />
+            <span>
+              {refreshingKnowledge
+                ? 'Refreshing KB…'
+                : kb?.stats
+                  ? `KB · ${kb.stats.totalModules} mod`
+                  : 'Refresh KB'}
+            </span>
+          </button>
+        )}
+
         <div className="level-menu-wrap" ref={mapRef}>
           <button
             type="button"
@@ -130,7 +171,7 @@ export function StageProgressBar({
               setMapOpen((v) => !v);
               setLevelOpen(false);
             }}
-            title="View your Knowledge Map & custom topics"
+            title="View your Knowledge Map & scanned repository modules"
           >
             <MapIcon size={13} />
             <span>Map · {exploredCount}</span>
@@ -150,6 +191,39 @@ export function StageProgressBar({
                   <p className="knowledge-summary-note">{learning.lastAssessmentSummary}</p>
                 )}
               </div>
+
+              {kb?.stats && (
+                <div className="kb-popover-banner">
+                  <div className="kb-popover-top">
+                    <span className="kb-popover-badge">
+                      <Database size={11} />
+                      <span>
+                        Repo Index · {kb.stats.indexedFiles} files · {kb.stats.totalSymbols} symbols
+                      </span>
+                    </span>
+                    {onRefreshKnowledge && (
+                      <button
+                        type="button"
+                        className="kb-inline-refresh-btn"
+                        disabled={disabled || refreshingKnowledge}
+                        onClick={() => onRefreshKnowledge()}
+                        title="Re-scan repository and refresh Knowledge Base"
+                      >
+                        <RefreshCw size={11} className={refreshingKnowledge ? 'spin-icon' : ''} />
+                        <span>{refreshingKnowledge ? 'Scanning…' : 'Refresh'}</span>
+                      </button>
+                    )}
+                  </div>
+                  <div className="kb-popover-meta">
+                    {kb.headCommit ? `HEAD @ ${kb.headCommit.slice(0, 7)}` : 'Working tree'}
+                    {kb.lastRefreshTrigger === 'git-pull-auto'
+                      ? ' · Auto-updated on git pull'
+                      : kb.lastRefreshTrigger === 'cached'
+                        ? ' · Cached'
+                        : ' · Fresh scan'}
+                  </div>
+                </div>
+              )}
 
               <div className="knowledge-section">
                 <div className="knowledge-section-label">Core Repository Pillars</div>
@@ -200,6 +274,32 @@ export function StageProgressBar({
                   ))
                 )}
               </div>
+
+              {kbModules.length > 0 && (
+                <div className="knowledge-section">
+                  <div className="knowledge-section-label">
+                    Scanned Repo Modules ({kbModules.length})
+                  </div>
+                  {kbModules.slice(0, 10).map((mod) => (
+                    <button
+                      key={mod.id}
+                      type="button"
+                      disabled={disabled}
+                      className="topic-row"
+                      title={mod.role}
+                      onClick={() => {
+                        onSelectModule?.(mod.id);
+                        setMapOpen(false);
+                      }}
+                    >
+                      <span className="topic-row-title">{mod.id}</span>
+                      <span className="mastery-pill mastery-unexplored">
+                        {mod.layer} · {mod.fileCount}f
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -170,6 +170,7 @@ export async function runDemoTurn(
     completedStages: [...session.completedStages].sort((a, b) => a - b),
     diagnostic: { ...session.diagnostic },
     learning: cloneLearningState(session.learning),
+    knowledgeStatus: session.knowledgeStatus ? { ...session.knowledgeStatus } : undefined,
     observedFilesCount: session.observedFiles.size,
     observedCommitsCount: session.observedCommits.size,
   });
@@ -246,6 +247,28 @@ async function buildCustomTopicLesson(
   const cleanTitle = rawTopic.charAt(0).toUpperCase() + rawTopic.slice(1);
   const searchToken = rawTopic.split(/\s+/).find((w) => w.length >= 3) ?? rawTopic;
 
+  const kmMatches: string[] = [];
+  if (session.knowledgeMap) {
+    const matchedFromKm = await emitToolStep(
+      callbacks,
+      'query_knowledge_map',
+      `Queried Knowledge Map for "${searchToken}"`,
+      searchToken,
+      async () => {
+        const lower = searchToken.toLowerCase();
+        const files = session.knowledgeMap!.files
+          .filter(
+            (f) =>
+              f.path.toLowerCase().includes(lower) ||
+              f.exports.some((e) => e.name.toLowerCase().includes(lower))
+          )
+          .map((f) => f.path);
+        return files.slice(0, 6);
+      }
+    );
+    kmMatches.push(...matchedFromKm);
+  }
+
   const tree = await emitToolStep(
     callbacks,
     'list_tree',
@@ -270,6 +293,7 @@ async function buildCustomTopicLesson(
 
   const relatedFiles = [
     ...new Set([
+      ...kmMatches,
       ...pathMatches.filter((p) => p.type === 'file').map((p) => p.path),
       ...grepRes.matches.map((m) => m.path),
     ]),

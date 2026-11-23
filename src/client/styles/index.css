@@ -3331,3 +3331,188 @@ select {
     display: none;
   }
 }
+
+/* Pre-Onboarding Repo Scanner Progress & Knowledge Base Controls */
+@keyframes spin-continuous {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin-icon {
+  animation: spin-continuous 0.9s linear infinite;
+}
+
+.scan-progress-card {
+  width: 100%;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid #dbe7fb;
+  background: #f8fafd;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scan-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.scan-progress-title-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.scan-progress-percent {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.scan-progress-bar-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.scan-progress-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.22s ease;
+}
+
+.scan-progress-message {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scan-steps-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.scan-step-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  background: var(--bg-page);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+}
+
+.scan-step-chip.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 500;
+}
+
+.scan-step-chip.done {
+  color: var(--success);
+  border-color: rgba(19, 115, 51, 0.25);
+  background: var(--success-soft);
+}
+
+.scan-step-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.kb-refresh-chip.is-stale {
+  border-color: #f59e0b;
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.kb-popover-banner {
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kb-popover-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.kb-popover-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.kb-inline-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-page);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.kb-inline-refresh-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.kb-popover-meta {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.knowledge-toast-banner {
+  max-width: 780px;
+  width: calc(100% - 40px);
+  margin: 8px auto 0;
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  border: 1px solid rgba(26, 115, 232, 0.25);
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-align: center;
+}
+

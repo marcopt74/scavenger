@@ -1,21 +1,48 @@
-import { ArrowRight, FolderGit2, FolderOpen, Lock, Settings2, Sparkles } from 'lucide-react';
+import {
+  ArrowRight,
+  CheckCircle2,
+  FolderGit2,
+  FolderOpen,
+  Loader2,
+  Lock,
+  Settings2,
+  Sparkles,
+} from 'lucide-react';
 import { useRef, useState } from 'react';
-import type { HealthInfo, ProviderSelection } from '../../shared/types';
+import type { HealthInfo, ProviderSelection, ScanPhase } from '../../shared/types';
 import { FileExplorerModal } from './FileExplorerModal';
+
+export interface ScanProgressState {
+  phase: ScanPhase;
+  message: string;
+  percent: number;
+  filesProcessed?: number;
+  totalFiles?: number;
+}
 
 interface RepoWelcomeProps {
   health: HealthInfo | null;
   provider: ProviderSelection;
   loading: boolean;
+  scanProgress?: ScanProgressState | null;
   error: string | null;
   onStartSession: (repoPath: string) => void;
   onOpenSettings: () => void;
 }
 
+const SCAN_STEPS: Array<{ id: ScanPhase; label: string }> = [
+  { id: 'recon', label: 'Root reconnaissance & git HEAD inspection' },
+  { id: 'indexing', label: 'Indexing files, exported symbols & imports' },
+  { id: 'dependencies', label: 'Mapping cross-module dependencies & flows' },
+  { id: 'synthesis', label: 'Synthesizing architecture Knowledge Map' },
+  { id: 'saving', label: 'Caching Knowledge Map locally' },
+];
+
 export function RepoWelcome({
   health,
   provider,
   loading,
+  scanProgress,
   error,
   onStartSession,
   onOpenSettings,
@@ -41,9 +68,9 @@ export function RepoWelcome({
         <h1 className="welcome-title">Understand any codebase, from the root up.</h1>
 
         <p className="welcome-subtitle">
-          Point Scavenger at a local repository. It starts with read-only root reconnaissance,
-          calibrates to your background, and walks you through purpose, architecture, core flows,
-          and git evolution with live diagrams.
+          Point Scavenger at a local repository. Our scanner agent builds a pre-onboarding Knowledge
+          Map of modules, symbols, and dependencies first, then walks you through purpose,
+          architecture, core flows, and git evolution with live diagrams.
         </p>
 
         <form className="repo-form" onSubmit={handleSubmit}>
@@ -74,10 +101,51 @@ export function RepoWelcome({
             className="primary-pill-btn"
             disabled={loading || !repoPath.trim()}
           >
-            <span>{loading ? 'Inspecting…' : 'Start Onboarding'}</span>
+            <span>{loading ? 'Scanning Repo…' : 'Start Onboarding'}</span>
             <ArrowRight size={15} />
           </button>
         </form>
+
+        {loading && scanProgress && (
+          <div className="scan-progress-card" role="status" aria-live="polite">
+            <div className="scan-progress-header">
+              <div className="scan-progress-title-row">
+                <Loader2 size={15} className="spin-icon" />
+                <span className="scan-progress-title">
+                  Building Pre-Onboarding Repository Knowledge Map
+                </span>
+              </div>
+              <span className="scan-progress-percent">{Math.min(100, Math.max(5, scanProgress.percent))}%</span>
+            </div>
+            <div className="scan-progress-bar-track">
+              <div
+                className="scan-progress-bar-fill"
+                style={{ width: `${Math.min(100, Math.max(5, scanProgress.percent))}%` }}
+              />
+            </div>
+            <div className="scan-progress-message">{scanProgress.message}</div>
+            <div className="scan-steps-row">
+              {SCAN_STEPS.map((step, idx) => {
+                const currentIdx = SCAN_STEPS.findIndex(
+                  (s) =>
+                    s.id ===
+                    (scanProgress.phase === 'incremental-diff' ? 'indexing' : scanProgress.phase)
+                );
+                const isDone = currentIdx > idx || scanProgress.percent >= 100;
+                const isCurrent = currentIdx === idx && scanProgress.percent < 100;
+                return (
+                  <div
+                    key={step.id}
+                    className={`scan-step-chip ${isDone ? 'done' : isCurrent ? 'active' : ''}`}
+                  >
+                    {isDone ? <CheckCircle2 size={12} /> : <span className="scan-step-dot" />}
+                    <span>{step.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="welcome-quick-row">
           {health?.suggestedRepoPath && (

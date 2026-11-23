@@ -156,6 +156,172 @@ export interface RootReconSummary {
   inspectedAt: string;
 }
 
+export type RepoModuleLayer =
+  | 'entry'
+  | 'core'
+  | 'api'
+  | 'ui'
+  | 'data'
+  | 'guard'
+  | 'shared'
+  | 'test'
+  | 'config';
+
+export type RepoSymbolKind =
+  | 'function'
+  | 'class'
+  | 'interface'
+  | 'type'
+  | 'const'
+  | 'component'
+  | 'route'
+  | 'default';
+
+export interface RepoExportedSymbol {
+  name: string;
+  kind: RepoSymbolKind;
+  line: number;
+}
+
+export interface RepoImportRef {
+  source: string;
+  resolvedPath?: string;
+  symbols: string[];
+}
+
+export interface RepoFileIndexEntry {
+  path: string;
+  moduleId: string;
+  language: string;
+  lines: number;
+  sizeBytes: number;
+  mtimeMs: number;
+  roleSummary?: string;
+  isEntryPoint?: boolean;
+  exports: RepoExportedSymbol[];
+  imports: RepoImportRef[];
+}
+
+export interface RepoDependencyEdge {
+  from: string;
+  to: string;
+  kind: 'import' | 'reexport' | 'dynamic';
+}
+
+export interface RepoModuleNode {
+  id: string;
+  name: string;
+  path: string;
+  role: string;
+  layer: RepoModuleLayer;
+  files: string[];
+  dependsOnModules: string[];
+  dependedOnByModules: string[];
+  keySymbols: string[];
+}
+
+export interface RepoEntryPoint {
+  path: string;
+  role: string;
+  kind: 'server' | 'client' | 'cli' | 'library' | 'test' | 'config';
+}
+
+export interface RepoCoreFlow {
+  id: string;
+  name: string;
+  summary: string;
+  files: string[];
+  steps: string[];
+}
+
+export interface RepoKnowledgeStats {
+  totalFiles: number;
+  indexedFiles: number;
+  totalModules: number;
+  totalSymbols: number;
+  totalEdges: number;
+  durationMs: number;
+}
+
+export interface RepoKnowledgeSummary {
+  purpose: string;
+  architectureOverview: string;
+  entryPoints: RepoEntryPoint[];
+  coreFlows: RepoCoreFlow[];
+  conventions: string[];
+}
+
+export interface RepoKnowledgeMap {
+  version: number;
+  repoPath: string;
+  repoName: string;
+  headCommit?: string;
+  branch?: string;
+  scannedAt: string;
+  updatedAt: string;
+  scanStrategy: 'hybrid' | 'static';
+  stats: RepoKnowledgeStats;
+  summary: RepoKnowledgeSummary;
+  modules: RepoModuleNode[];
+  files: RepoFileIndexEntry[];
+  dependencyEdges: RepoDependencyEdge[];
+}
+
+export type KnowledgeRefreshTrigger = 'initial' | 'cached' | 'git-pull-auto' | 'manual';
+
+export interface KnowledgeBaseStatus {
+  state: 'ready' | 'scanning' | 'refreshing' | 'stale' | 'error';
+  headCommit?: string;
+  currentRepoHead?: string;
+  branch?: string;
+  isStale: boolean;
+  changedFilesCount?: number;
+  commitsBehind?: number;
+  scannedAt?: string;
+  updatedAt?: string;
+  scanStrategy?: 'hybrid' | 'static';
+  lastRefreshTrigger?: KnowledgeRefreshTrigger;
+  stats?: RepoKnowledgeStats;
+  modules?: Array<{
+    id: string;
+    name: string;
+    path: string;
+    role: string;
+    layer: RepoModuleLayer;
+    fileCount: number;
+    keySymbols: string[];
+  }>;
+  entryPoints?: RepoEntryPoint[];
+  coreFlows?: RepoCoreFlow[];
+  errorMessage?: string;
+}
+
+export type ScanPhase =
+  | 'recon'
+  | 'indexing'
+  | 'dependencies'
+  | 'synthesis'
+  | 'incremental-diff'
+  | 'saving';
+
+export type ScanSSEEvent =
+  | {
+      type: 'scan-progress';
+      phase: ScanPhase;
+      message: string;
+      percent: number;
+      filesProcessed?: number;
+      totalFiles?: number;
+    }
+  | {
+      type: 'scan-complete';
+      session: SessionPublicState;
+    }
+  | {
+      type: 'scan-error';
+      error: string;
+    };
+
 export type ConceptVisualLayout = 'pipeline' | 'hub' | 'layers';
 
 export type ConceptVisualAccent = 'cobalt' | 'emerald' | 'violet' | 'amber';
@@ -228,6 +394,7 @@ export interface SessionPublicState {
   diagnostic: DiagnosticProfile;
   learning: LearningState;
   rootRecon: RootReconSummary;
+  knowledgeStatus?: KnowledgeBaseStatus;
   provider: ProviderSelection;
   observedFilesCount: number;
   observedCommitsCount: number;
@@ -246,6 +413,7 @@ export type SSEEvent =
       completedStages: OnboardingStage[];
       diagnostic: DiagnosticProfile;
       learning: LearningState;
+      knowledgeStatus?: KnowledgeBaseStatus;
       observedFilesCount: number;
       observedCommitsCount: number;
     }

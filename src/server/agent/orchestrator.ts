@@ -10,7 +10,10 @@ import type {
   VisualArtifact,
 } from '../../shared/types.js';
 import { resolveLanguageModel } from '../config.js';
+import { getRepoGitState } from '../knowledge/gitWatcher.js';
+import { scanOrRefreshRepoKnowledge } from '../knowledge/scannerAgent.js';
 import { cloneLearningState } from '../session/learningEngine.js';
+import { updateSessionKnowledge } from '../session/sessionStore.js';
 import type { InternalSession } from '../session/sessionStore.js';
 import { detectRecalibrationSignal } from '../session/stageMachine.js';
 import { createAgentTools } from '../tools/agentTools.js';
@@ -45,6 +48,7 @@ export async function runOnboardingTurn(
       completedStages: [...session.completedStages].sort((a, b) => a - b),
       diagnostic: { ...session.diagnostic },
       learning: cloneLearningState(session.learning),
+      knowledgeStatus: session.knowledgeStatus ? { ...session.knowledgeStatus } : undefined,
       observedFilesCount: session.observedFiles.size,
       observedCommitsCount: session.observedCommits.size,
     });
@@ -62,6 +66,12 @@ export async function runOnboardingTurn(
     if (idx >= 0) toolActivities[idx] = a;
     else toolActivities.push(a);
   };
+
+  // Auto-detect git pull / HEAD updates before turn execution and incrementally refresh Knowledge Map
+  await ensureSessionKnowledgeFreshBeforeTurn(session, activeProvider, {
+    emit,
+    recordActivity,
+  });
   const recordLessonFooter = (footer: {
     checkInQuestions?: CheckInQuestion[];
     suggestedNextSteps?: SuggestedNextStep[];
@@ -150,10 +160,83 @@ export async function runOnboardingTurn(
     completedStages: [...session.completedStages].sort((a, b) => a - b),
     diagnostic: { ...session.diagnostic },
     learning: cloneLearningState(session.learning),
+    knowledgeStatus: session.knowledgeStatus ? { ...session.knowledgeStatus } : undefined,
     observedFilesCount: session.observedFiles.size,
     observedCommitsCount: session.observedCommits.size,
   });
   emit({ type: 'done', message: assistantMessage });
 
   return assistantMessage;
+}
+
+async function ensureSessionKnowledgeFreshBeforeTurn(
+  session: InternalSession,
+  provider: ProviderSelection,
+  callbacks: {
+    emit: (event: SSEEvent) => void;
+    recordActivity: (activity: ToolActivity) => void;
+  }
+): Promise<void> {
+  try {
+    if (!session.knowledgeMap) {
+      const scanned = await scanOrRefreshRepoKnowledge(session.repoPath, {
+        recon: session.rootRecon,
+        provider,
+        skipLlmSynthesis: provider.provider === 'demo',
+      });
+      updateSessionKnowledge(session, scanned.knowledgeMap, scanned.status);
+      return;
+    }
+
+    if (!session.rootRecon.isGitRepo || !session.knowledgeMap.headCommit) {
+      return;
+    }
+
+    const gitState = await getRepoGitState(session.repoPath);
+    if (!gitState.headCommit || gitState.headCommit === session.knowledgeMap.headCommit) {
+      return;
+    }
+
+    const oldShort = session.knowledgeMap.headCommit.slice(0, 7);
+    const newShort = gitState.headCommit.slice(0, 7);
+    const actId = `act_${crypto.randomUUID().slice(0, 8)}`;
+    const running: ToolActivity = {
+      id: actId,
+      toolName: 'refresh_knowledge_map',
+      summary: `Detected git update (${oldShort} → ${newShort}) — incrementally refreshing Knowledge Map…`,
+      target: newShort,
+      status: 'running',
+    };
+    callbacks.emit({ type: 'tool-activity', activity: running });
+
+    const refreshed = await scanOrRefreshRepoKnowledge(session.repoPath, {
+      recon: session.rootRecon,
+      provider,
+      trigger: 'git-pull-auto',
+      skipLlmSynthesis: provider.provider === 'demo',
+    });
+    updateSessionKnowledge(session, refreshed.knowledgeMap, refreshed.status);
+
+    const completed: ToolActivity = {
+      id: actId,
+      toolName: 'refresh_knowledge_map',
+      summary: `Auto-refreshed Knowledge Map after git update (${oldShort} → ${newShort}, ${refreshed.changedFilesCount} file${refreshed.changedFilesCount === 1 ? '' : 's'} updated)`,
+      target: newShort,
+      status: 'completed',
+    };
+    callbacks.recordActivity(completed);
+    callbacks.emit({ type: 'tool-activity', activity: completed });
+    callbacks.emit({
+      type: 'session-state',
+      currentStage: session.currentStage,
+      completedStages: [...session.completedStages].sort((a, b) => a - b),
+      diagnostic: { ...session.diagnostic },
+      learning: cloneLearningState(session.learning),
+      knowledgeStatus: session.knowledgeStatus ? { ...session.knowledgeStatus } : undefined,
+      observedFilesCount: session.observedFiles.size,
+      observedCommitsCount: session.observedCommits.size,
+    });
+  } catch {
+    // Non-fatal: continue onboarding turn with existing knowledge map
+  }
 }

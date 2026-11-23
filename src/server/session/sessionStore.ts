@@ -2,15 +2,18 @@ import crypto from 'node:crypto';
 import type {
   ChatMessage,
   DiagnosticProfile,
+  KnowledgeBaseStatus,
   LearningState,
   OnboardingStage,
   ProviderSelection,
+  RepoKnowledgeMap,
   RootReconSummary,
   SessionPublicState,
   ToolActivity,
   UserLevel,
 } from '../../shared/types.js';
 import { getDefaultProviderSelection } from '../config.js';
+import { toKnowledgeBaseStatus } from '../knowledge/knowledgeStore.js';
 import { cloneLearningState, createInitialLearningState } from './learningEngine.js';
 
 export interface InternalSession {
@@ -22,6 +25,8 @@ export interface InternalSession {
   diagnostic: DiagnosticProfile;
   learning: LearningState;
   rootRecon: RootReconSummary;
+  knowledgeMap?: RepoKnowledgeMap;
+  knowledgeStatus?: KnowledgeBaseStatus;
   provider: ProviderSelection;
   observedFiles: Set<string>;
   observedCommits: Set<string>;
@@ -34,33 +39,60 @@ const sessions = new Map<string, InternalSession>();
 
 export function createSession(
   rootRecon: RootReconSummary,
-  providerOverride?: ProviderSelection
+  providerOverride?: ProviderSelection,
+  knowledgeOptions?: {
+    knowledgeMap?: RepoKnowledgeMap;
+    knowledgeStatus?: KnowledgeBaseStatus;
+  }
 ): InternalSession {
   const id = `sess_${crypto.randomUUID().slice(0, 10)}`;
   const now = new Date().toISOString();
   const provider = providerOverride ?? getDefaultProviderSelection();
   const learning = createInitialLearningState(rootRecon);
+  const knowledgeMap = knowledgeOptions?.knowledgeMap;
+  const knowledgeStatus =
+    knowledgeOptions?.knowledgeStatus ??
+    (knowledgeMap ? toKnowledgeBaseStatus(knowledgeMap, { lastRefreshTrigger: 'initial' }) : undefined);
 
   const observedFiles = new Set<string>();
   if (rootRecon.readmePath) observedFiles.add(rootRecon.readmePath);
   for (const m of rootRecon.manifests) observedFiles.add(m.path);
   for (const e of rootRecon.topLevelEntries) observedFiles.add(e.name);
+  if (knowledgeMap) {
+    for (const f of knowledgeMap.files) {
+      observedFiles.add(f.path);
+    }
+  }
 
   const observedCommits = new Set<string>();
   for (const c of rootRecon.recentMilestones) {
     observedCommits.add(c.shortHash);
     observedCommits.add(c.hash);
   }
+  if (knowledgeMap?.headCommit) {
+    observedCommits.add(knowledgeMap.headCommit);
+    observedCommits.add(knowledgeMap.headCommit.slice(0, 7));
+  }
 
-  const openingActivities: ToolActivity[] = [
-    {
+  const openingActivities: ToolActivity[] = [];
+
+  if (knowledgeMap) {
+    openingActivities.push({
       id: `act_${crypto.randomUUID().slice(0, 6)}`,
-      toolName: 'list_tree',
-      summary: `Scanned root layout (${rootRecon.topLevelEntries.length} top-level entries)`,
-      target: '.',
+      toolName: 'query_knowledge_map',
+      summary: `Built repository Knowledge Map (${knowledgeMap.stats.indexedFiles} files, ${knowledgeMap.stats.totalModules} modules, ${knowledgeMap.stats.totalSymbols} symbols, ${knowledgeMap.stats.totalEdges} edges)`,
+      target: knowledgeMap.repoName,
       status: 'completed',
-    },
-  ];
+    });
+  }
+
+  openingActivities.push({
+    id: `act_${crypto.randomUUID().slice(0, 6)}`,
+    toolName: 'list_tree',
+    summary: `Scanned root layout (${rootRecon.topLevelEntries.length} top-level entries)`,
+    target: '.',
+    status: 'completed',
+  });
 
   if (rootRecon.readmePath) {
     openingActivities.push({
@@ -95,7 +127,7 @@ export function createSession(
   const openingMessage: ChatMessage = {
     id: `msg_${crypto.randomUUID().slice(0, 8)}`,
     role: 'assistant',
-    content: buildStage0OpeningMessage(rootRecon),
+    content: buildStage0OpeningMessage(rootRecon, knowledgeMap),
     createdAt: now,
     stage: 0,
     topicTitle: learning.activeTopicTitle,
@@ -115,6 +147,8 @@ export function createSession(
     },
     learning,
     rootRecon,
+    knowledgeMap,
+    knowledgeStatus,
     provider,
     observedFiles,
     observedCommits,
@@ -129,6 +163,24 @@ export function createSession(
 
 export function getSession(id: string): InternalSession | undefined {
   return sessions.get(id);
+}
+
+export function updateSessionKnowledge(
+  session: InternalSession,
+  knowledgeMap: RepoKnowledgeMap,
+  knowledgeStatus: KnowledgeBaseStatus
+): InternalSession {
+  session.knowledgeMap = knowledgeMap;
+  session.knowledgeStatus = knowledgeStatus;
+  for (const f of knowledgeMap.files) {
+    session.observedFiles.add(f.path);
+  }
+  if (knowledgeMap.headCommit) {
+    session.observedCommits.add(knowledgeMap.headCommit);
+    session.observedCommits.add(knowledgeMap.headCommit.slice(0, 7));
+  }
+  session.updatedAt = new Date().toISOString();
+  return session;
 }
 
 export function updateSessionCalibration(
@@ -165,6 +217,7 @@ export function toPublicState(session: InternalSession): SessionPublicState {
     diagnostic: { ...session.diagnostic },
     learning: cloneLearningState(session.learning),
     rootRecon: session.rootRecon,
+    knowledgeStatus: session.knowledgeStatus ? { ...session.knowledgeStatus } : undefined,
     provider: { ...session.provider },
     observedFilesCount: session.observedFiles.size,
     observedCommitsCount: session.observedCommits.size,
@@ -174,7 +227,10 @@ export function toPublicState(session: InternalSession): SessionPublicState {
   };
 }
 
-function buildStage0OpeningMessage(recon: RootReconSummary): string {
+function buildStage0OpeningMessage(
+  recon: RootReconSummary,
+  knowledgeMap?: RepoKnowledgeMap
+): string {
   const stackPhrase =
     recon.detectedStack.length > 0
       ? recon.detectedStack.slice(0, 5).join(', ')
@@ -192,6 +248,10 @@ function buildStage0OpeningMessage(recon: RootReconSummary): string {
       ? `At the root, the project separates its moving parts across ${topDirs.join(', ')}, anchored by ${manifestNames.length > 0 ? manifestNames.join(', ') : 'its top-level configuration files'}${recon.readmePath ? ` and documented in \`${recon.readmePath}\`` : ''}.`
       : `At the root, the repository keeps a compact layout anchored by ${manifestNames.length > 0 ? manifestNames.join(', ') : 'its top-level files'}${recon.readmePath ? ` and \`${recon.readmePath}\`` : ''}.`;
 
+  const knowledgeSentence = knowledgeMap
+    ? ` My pre-onboarding scanner also built a live **Repository Knowledge Map** indexing **${knowledgeMap.stats.indexedFiles} files**, **${knowledgeMap.stats.totalModules} modules**, **${knowledgeMap.stats.totalSymbols} exported symbols**, and **${knowledgeMap.stats.totalEdges} cross-file dependency edges**—so I can answer architectural and module questions right away and dive into specific code lines on demand.`
+    : '';
+
   const gitSentence = recon.isGitRepo
     ? recon.recentMilestones.length > 0
       ? `Git history is live too—we're looking at branch \`${recon.branch ?? 'HEAD'}\`, with the latest milestone \`${recon.recentMilestones[0].shortHash}\` (*"${recon.recentMilestones[0].subject}"*) on ${recon.recentMilestones[0].date}, which means we can also trace *why* decisions evolved over time.`
@@ -201,7 +261,7 @@ function buildStage0OpeningMessage(recon: RootReconSummary): string {
   return [
     `Welcome aboard! I just took a quick read-only walk around the root of **\`${recon.repoName}\`** so we can start from solid ground rather than guessing.`,
     '',
-    `From the first glance, this looks like a **${stackPhrase}** repository. ${layoutSentence} ${gitSentence}`,
+    `From the first glance, this looks like a **${stackPhrase}** repository. ${layoutSentence}${knowledgeSentence} ${gitSentence}`,
     '',
     `Think of this session like a pair of engineers at a whiteboard: ==we'll start from clear mental models and work our way into how pieces depend on one another, how they behave over time, and the subtle details that usually trip newcomers up==.`,
     '',

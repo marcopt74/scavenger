@@ -8,6 +8,9 @@ Scavenger is a local **Repository Onboarding Agent** with a clean, Gemini-inspir
 
 ## Highlights
 
+- **Pre-Onboarding Repo Scanner Agent & Persistent Knowledge Base:** Before onboarding starts, Scavenger scans the repository (indexing files, exported symbols with line numbers, cross-file imports/dependencies, entry points, and module boundaries) and synthesizes a **Repository Knowledge Map**. The onboarding agent answers architectural, module, and flow questions immediately from the Knowledge Map and dives into raw code lines on demand.
+- **Auto-Refresh on `git pull` & On-Demand Refresh:** Scavenger tracks the repository's `HEAD` commit SHA, automatically detects when a `git pull` updates the local repo, incrementally re-indexes only the diffed files (`git diff --name-status`), and provides a 1-click **Refresh KB** button in the top bar.
+- **Zero-Commit Knowledge Storage (`~/.scavenger/knowledge/`):** Knowledge maps are cached outside the target repo with `0600` permissions and an automatic inner `.gitignore` (`*`), plus explicit `.gitignore` and `pathGuard` exclusions so knowledge folders are **never** committed or pushed.
 - **Whiteboard Mentor Pedagogy:** Teaches in flowing, grounded narratives — mental models first, then interdependencies, behavior over time, subtle pitfalls, and memorable takeaways — never dry file-inventory bullet soup.
 - **Non-Linear, Mastery-Driven Learning:** Explore the 5 core repository pillars (**Recon**, **Purpose**, **Architecture**, **Flows**, **Evolution**) in any order, or ask to learn *any* module, file, or behavior directly. An interactive **Knowledge Map**, optional **Quick Check** questions (≤ 3), and clickable **Suggested Next Steps** adapt as your understanding grows.
 - **Visual-First Diagrams & Concept Art:**

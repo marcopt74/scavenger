@@ -10,10 +10,18 @@ import type {
   UserLevel,
   VisualArtifact,
 } from '../shared/types';
-import { createSession, fetchHealth, patchSession, streamChatTurn } from './api/client';
+import {
+  checkSessionKnowledgeStatus,
+  fetchHealth,
+  patchSession,
+  refreshSessionKnowledge,
+  streamChatTurn,
+  streamSessionInit,
+} from './api/client';
 import { ChatMessageList } from './components/ChatMessageList';
 import { Composer } from './components/Composer';
 import { RepoWelcome } from './components/RepoWelcome';
+import type { ScanProgressState } from './components/RepoWelcome';
 import { SettingsModal } from './components/SettingsModal';
 import { StageProgressBar } from './components/StageProgressBar';
 
@@ -25,6 +33,7 @@ export function App() {
   });
   const [session, setSession] = useState<SessionPublicState | null>(null);
   const [initializing, setInitializing] = useState(false);
+  const [scanProgress, setScanProgress] = useState<ScanProgressState | null>(null);
   const [initError, setInitError] = useState<string | null>(null);
 
   const [isStreaming, setIsStreaming] = useState(false);
@@ -33,6 +42,8 @@ export function App() {
   const [streamingVisuals, setStreamingVisuals] = useState<VisualArtifact[]>([]);
   const [chatError, setChatError] = useState<string | null>(null);
 
+  const [refreshingKnowledge, setRefreshingKnowledge] = useState(false);
+  const [knowledgeToast, setKnowledgeToast] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
@@ -50,17 +61,91 @@ export function App() {
       });
   }, []);
 
+  // Automatically check if git pull updated local repo HEAD on window focus or periodic poll
+  useEffect(() => {
+    if (!session || isStreaming || refreshingKnowledge) return;
+
+    const checkGitPullUpdate = async () => {
+      try {
+        const res = await checkSessionKnowledgeStatus(session.id, true);
+        if (res.refreshed) {
+          setSession(res.session);
+          setKnowledgeToast(
+            `Detected git update — Knowledge Map auto-refreshed (${res.changedFilesCount} file${res.changedFilesCount === 1 ? '' : 's'} updated).`
+          );
+        }
+      } catch {
+        // Ignore background check errors
+      }
+    };
+
+    const onFocus = () => {
+      void checkGitPullUpdate();
+    };
+    window.addEventListener('focus', onFocus);
+    const interval = window.setInterval(() => {
+      void checkGitPullUpdate();
+    }, 25_000);
+
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.clearInterval(interval);
+    };
+  }, [session?.id, isStreaming, refreshingKnowledge]);
+
+  useEffect(() => {
+    if (!knowledgeToast) return;
+    const timer = window.setTimeout(() => setKnowledgeToast(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [knowledgeToast]);
+
   async function handleStartSession(repoPath: string) {
     setInitializing(true);
     setInitError(null);
     setChatError(null);
+    setScanProgress({
+      phase: 'recon',
+      message: 'Starting repository scanner agent…',
+      percent: 5,
+    });
     try {
-      const created = await createSession(repoPath, provider);
+      const created = await streamSessionInit(
+        repoPath,
+        (event) => {
+          if (event.type === 'scan-progress') {
+            setScanProgress({
+              phase: event.phase,
+              message: event.message,
+              percent: event.percent,
+              filesProcessed: event.filesProcessed,
+              totalFiles: event.totalFiles,
+            });
+          }
+        },
+        provider
+      );
       setSession(created);
     } catch (err) {
       setInitError(err instanceof Error ? err.message : 'Failed to open repository.');
     } finally {
       setInitializing(false);
+      setScanProgress(null);
+    }
+  }
+
+  async function handleRefreshKnowledge(mode: 'full' | 'incremental' = 'full') {
+    if (!session || refreshingKnowledge) return;
+    setRefreshingKnowledge(true);
+    try {
+      const res = await refreshSessionKnowledge(session.id, mode);
+      setSession(res.session);
+      setKnowledgeToast(
+        `Knowledge Map refreshed (${res.session.knowledgeStatus?.stats?.indexedFiles ?? 0} files, ${res.session.knowledgeStatus?.stats?.totalModules ?? 0} modules indexed).`
+      );
+    } catch (err) {
+      setChatError(err instanceof Error ? err.message : 'Failed to refresh Knowledge Map.');
+    } finally {
+      setRefreshingKnowledge(false);
     }
   }
 
@@ -119,6 +204,7 @@ export function App() {
                     completedStages: event.completedStages,
                     diagnostic: event.diagnostic,
                     learning: event.learning,
+                    knowledgeStatus: event.knowledgeStatus ?? prev.knowledgeStatus,
                     observedFilesCount: event.observedFilesCount,
                     observedCommitsCount: event.observedCommitsCount,
                   }
@@ -204,6 +290,7 @@ export function App() {
           health={health}
           provider={provider}
           loading={initializing}
+          scanProgress={scanProgress}
           error={initError}
           onStartSession={handleStartSession}
           onOpenSettings={() => setSettingsOpen(true)}
@@ -213,15 +300,25 @@ export function App() {
           <StageProgressBar
             session={session}
             disabled={isStreaming}
+            refreshingKnowledge={refreshingKnowledge}
             onSelectPillar={handleSelectPillar}
             onSelectTopic={handleSelectTopic}
+            onSelectModule={(modId) => void handleSend(`Teach me how the \`${modId}\` module works and how it connects to the rest of the repo.`)}
+            onRefreshKnowledge={() => void handleRefreshKnowledge('full')}
             onChangeLevel={handleChangeLevel}
             onOpenSettings={() => setSettingsOpen(true)}
             onResetSession={() => {
               setSession(null);
               setChatError(null);
+              setKnowledgeToast(null);
             }}
           />
+
+          {knowledgeToast && (
+            <div className="knowledge-toast-banner" role="status">
+              <span>{knowledgeToast}</span>
+            </div>
+          )}
 
           <ChatMessageList
             messages={session.messages}
