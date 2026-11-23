@@ -8,17 +8,22 @@ Scavenger is a local **Repository Onboarding Agent** with a clean, Gemini-inspir
 
 ## Highlights
 
-- **Pre-Onboarding Repo Scanner Agent & Persistent Knowledge Base:** Before onboarding starts, Scavenger scans the repository (indexing files, exported symbols with line numbers, cross-file imports/dependencies, entry points, and module boundaries) and synthesizes a **Repository Knowledge Map**. The onboarding agent answers architectural, module, and flow questions immediately from the Knowledge Map and dives into raw code lines on demand.
-- **Auto-Refresh on `git pull` & On-Demand Refresh:** Scavenger tracks the repository's `HEAD` commit SHA, automatically detects when a `git pull` updates the local repo, incrementally re-indexes only the diffed files (`git diff --name-status`), and provides a 1-click **Refresh KB** button in the top bar.
-- **Zero-Commit Knowledge Storage (`~/.scavenger/knowledge/`):** Knowledge maps are cached outside the target repo with `0600` permissions and an automatic inner `.gitignore` (`*`), plus explicit `.gitignore` and `pathGuard` exclusions so knowledge folders are **never** committed or pushed.
-- **Whiteboard Mentor Pedagogy:** Teaches in flowing, grounded narratives — mental models first, then interdependencies, behavior over time, subtle pitfalls, and memorable takeaways — never dry file-inventory bullet soup.
-- **Non-Linear, Mastery-Driven Learning:** Explore the 5 core repository pillars (**Recon**, **Purpose**, **Architecture**, **Flows**, **Evolution**) in any order, or ask to learn *any* module, file, or behavior directly. An interactive **Knowledge Map**, optional **Quick Check** questions (≤ 3), and clickable **Suggested Next Steps** adapt as your understanding grows.
-- **Visual-First Diagrams & Concept Art:**
-  - Crisp **Mermaid** SVG diagrams rendered on an architectural dot-grid canvas with semantic color-coded roles, a 1-click **Clean / Sketch** whiteboard style toggle, **Copy Source**, **SVG** and **2× Retina PNG** export, and an interactive **Zoom & Pan Lightbox**.
+- **Pre-Onboarding Repo Scanner Agent & Persistent Knowledge Base:** Before onboarding starts, Scavenger scans the repository (indexing files, exported symbols with line numbers, cross-file imports/dependencies, entry points, and module boundaries) with live streaming progress and synthesizes a **Repository Knowledge Map**. The onboarding agent answers architectural, module, and flow questions immediately from the Knowledge Map (`query_knowledge_map`) and dives into raw code lines on demand.
+- **Auto-Refresh on `git pull` & On-Demand Refresh:** Scavenger tracks the repository's `HEAD` commit SHA, automatically detects when a `git pull` updates the local repo, incrementally re-indexes only the diffed files (`git diff --name-status`), and provides a 1-click **Refresh KB** action in the left toolbar.
+- **Persistent Sessions & Cross-Session Mastery:** Onboarding sessions and cumulative per-repository mastery are persisted locally (`~/.scavenger/sessions/`), automatically restoring your active session across browser refreshes and letting you resume prior sessions, start fresh, or review cross-session progress at any time.
+- **Zero-Commit Local Storage (`~/.scavenger/`):** Both knowledge maps (`~/.scavenger/knowledge/`) and saved sessions (`~/.scavenger/sessions/`) are stored outside the target repository with `0600` permissions and an auto-generated inner `.gitignore` (`*`), plus explicit `.gitignore` and `pathGuard` exclusions so Scavenger artifacts are **never** committed or pushed.
+- **Whiteboard Mentor Pedagogy & Marker Highlights:** Teaches in flowing, grounded narratives — mental models first, then interdependencies, behavior over time, subtle pitfalls, and memorable takeaways — with realistic yellow highlighter callouts (`==key takeaway==`) for core architectural invariants and zero dry file-inventory bullet soup.
+- **Auto-Collapsing Left Toolbar & Non-Linear Learning:** Explore the 5 core repository pillars (**Recon**, **Purpose**, **Architecture**, **Flows**, **Evolution**) from the top rail in any order, or use the auto-collapsing **Left Toolbar** (expandable on hover or pinnable) to inspect the **Knowledge Base (`KB`)**, browse the interactive **Knowledge Map (`Map`)** (pillars, scanned architecture modules, and custom topics), open **Cross-Session Progress (`Progress`)**, or switch **Explanation Depth (`Depth`)**.
+- **Visual-First Diagrams & 3-Tier Concept Art:**
+  - Crisp **Mermaid** SVG diagrams rendered on an architectural dot-grid canvas with semantic color-coded roles, Light/Dark theme adaptation, a 1-click **Clean / Sketch** whiteboard style toggle, **Copy Source**, **SVG** and **2× Retina PNG** export, and an interactive **Zoom & Pan Lightbox**.
   - Optional local **D2** CLI rendering (`d2 --theme=1 --pad=28 - -`, zero disk writes) with automatic fallback.
-  - **Concept Illustrations:** Generates text-free editorial metaphor art via Gemini Imagen or OpenAI Images paired with structured component legends — or renders instant multi-layout vector concept maps (`pipeline`, `hub`, `layers`) offline.
+  - **3-Tier Concept Illustrations:** Generates editorial metaphor visuals via **(1)** native multimodal image output from your active session model, **(2)** dedicated Gemini Imagen / OpenAI Images endpoints or bespoke LLM-authored `<svg>` diagrams, or **(3)** instant deterministic multi-layout vector concept maps (`pipeline`, `hub`, `layers`) offline.
+- **Reading-First Streaming, Live Composer Progress & Light/Dark Theme:**
+  - **No forced auto-scroll while streaming:** Read from the top of a lesson undisturbed while tokens and diagrams stream in below, with a floating downward arrow cue (`↓`) whenever new content appears below the viewport.
+  - **Live Composer Status Banner:** Displays real-time phased progress (*Inspecting repository*, *Synthesizing lesson*, *Streaming response*), an elapsed timer, and live read-only tool pills while awaiting a response.
+  - **Light & Dark Theme Toggle:** Instant 1-click theme switching in the top bar and welcome screen, persisted across sessions with theme-aware diagrams and typography.
 - **Built-In Local File Explorer:** Click **Browse** on the welcome screen to pick any repository on disk visually with Git repository badges, clickable breadcrumbs, OS shortcuts (`Home`, `Workspace`, `Desktop`, `Documents`, `Root`), instant folder filtering, and keyboard navigation.
-- **In-App Settings Menu (No `.env` Required):** Configure API keys, switch between **GitHub Copilot** (auto-detects local Copilot IDE/CLI auth or signs in via in-app GitHub Device Flow and discovers live models enabled on your subscription), **Google Gemini**, **OpenAI**, **Anthropic Claude**, **OpenAI-Compatible** (Ollama, LM Studio, OpenRouter), or zero-key **Demo Mode**, pick curated model presets or custom model IDs, and **Test Connection** live — persisted locally with `0600` permissions and zero restarts.
+- **In-App Settings Menu (No `.env` Required):** Configure API keys, switch between **GitHub Copilot** (auto-detects local Copilot IDE/CLI auth or signs in via in-app GitHub Device Flow, supports Enterprise domains, and discovers live models enabled on your subscription), **Google Gemini**, **OpenAI**, **Anthropic Claude**, **OpenAI-Compatible** (Ollama, LM Studio, OpenRouter), or zero-key **Demo Mode**, pick curated model presets or custom model IDs, and **Test Connection** live — persisted locally with `0600` permissions and zero restarts.
 - **Strict Backend-Enforced Read-Only Guardrails:** Every filesystem and git inspection tool is strictly confined and lock-free — Scavenger never modifies files, creates git locks, or mutates your repository.
 
 ---
@@ -75,7 +80,7 @@ No need to edit `.env` files or restart the server:
    - **OpenAI-Compatible** — includes 1-click endpoint presets for **Ollama** (`http://localhost:11434/v1`), **LM Studio** (`http://localhost:1234/v1`), and **OpenRouter** (`https://openrouter.ai/api/v1`)
    - **Local Demo Mode** (zero API key)
 3. Add your API key inline or under the **API Keys** tab, then click **Test Connection** to verify credentials and latency before saving.
-4. *(Optional)* Under **Visuals & Safety**, toggle **AI Concept Image Generation** or customize the Gemini / OpenAI image model IDs.
+4. *(Optional)* Under **Visuals & Safety**, toggle **AI Concept Image Generation**, choose whether to **Use Active Session Model for Visuals** (native multimodal image output or bespoke LLM SVG generation before dedicated image APIs), or customize the Gemini / OpenAI image model IDs.
 5. Click **Save Settings**.
 
 **Where settings are stored:** Settings are written atomically to `~/.scavenger/config.json` (outside the git repository) with owner-only `0600` file permissions. Raw API keys are **never** sent back to the browser — the UI only displays masked previews (e.g. `AIza••••3x8Q`) and source badges (`Saved in Settings` vs `From .env`).
@@ -98,41 +103,48 @@ cp .env.example .env
 | `GOOGLE_GENERATIVE_AI_API_KEY` | Google Gemini API key (`GEMINI_API_KEY` also supported) | — |
 | `OPENAI_API_KEY` | OpenAI API key | — |
 | `ANTHROPIC_API_KEY` | Anthropic Claude API key | — |
-| `OPENAI_COMPATIBLE_BASE_URL` | Base URL for Ollama / LM Studio / OpenRouter / vLLM | — |
+| `OPENAI_COMPATIBLE_BASE_URL` | Base URL for Ollama / LM Studio / OpenRouter / vLLM | `http://localhost:11434/v1` |
 | `OPENAI_COMPATIBLE_API_KEY` | Optional API key for OpenAI-compatible servers | — |
-| `IMAGE_GEN_ENABLED` | Enable raster concept illustrations (`true` \| `false`) | `true` |
+| `IMAGE_GEN_ENABLED` | Enable concept illustrations (`true` \| `false`) | `true` |
 | `GEMINI_IMAGE_MODEL` | Gemini Imagen model ID | `imagen-3.0-generate-002` |
 | `OPENAI_IMAGE_MODEL` | OpenAI Images model ID | `gpt-image-1` |
 | `SCAVENGER_CONFIG_PATH` | Override path for local persistent settings file | `~/.scavenger/config.json` |
+| `SCAVENGER_KNOWLEDGE_DIR` | Override directory for local repository knowledge maps | `~/.scavenger/knowledge` |
+| `SCAVENGER_SESSIONS_DIR` | Override directory for persistent onboarding sessions | `~/.scavenger/sessions` |
 
 ---
 
 ## Using Scavenger
 
-### 1. Select a Local Repository
-On the welcome screen, choose a repository in any of three ways:
+### 1. Select or Resume a Local Repository
+On the welcome screen, choose a repository in any of four ways:
 - Click **Browse** inside the path bar to open the **File Explorer modal** — jump via **Places** shortcuts, spot Git repositories via `git` badges, filter folders instantly, double-click (or click `›`) to drill down, and click **Select Folder**.
 - Click **Inspect current workspace** to immediately onboard the directory Scavenger was launched from.
 - Type or paste any local path (including `~` expansion) and click **Start Onboarding**.
+- Resume any previous session from the **Recent Onboarding Sessions & Repository Progress** panel on the welcome screen, or click **New Session** to start a fresh walkthrough while retaining your cumulative repository mastery.
 
-### 2. Root Recon & Quick Calibration
-Scavenger immediately performs deterministic read-only root reconnaissance (top-level layout, README, root manifests/configs, and recent git commits) and opens with a grounded orientation plus quick depth calibration nudges:
+### 2. Pre-Onboarding Knowledge Scan, Root Recon & Calibration
+Scavenger runs a fast, read-only **Repository Knowledge Scan** (streaming progress phases to the screen) alongside deterministic root reconnaissance (top-level layout, README, root manifests/configs, and recent git commits), then opens with a grounded orientation and quick depth calibration nudges:
 - **Foundational:** Mental models, everyday analogies, plain definitions before abstractions.
 - **Intermediate:** Balanced architecture, module contracts, runtime flows, and entry points.
 - **Advanced:** Staff-level invariants, state/lifecycle trade-offs, coupling tensions, and git rationale.
 
-You can recalibrate depth at any time using the **Depth** selector in the top bar or by simply asking in chat (*"Explain simpler"* / *"Go deeper"*).
+You can recalibrate depth at any time using the **Depth** control in the left toolbar or by simply asking in chat (*"Explain simpler"* / *"Go deeper"*).
 
-### 3. Learn Non-Linearly
+### 3. Learn Non-Linearly with the Top Rail & Left Toolbar
 You are never locked into a rigid script:
 - Click any **Core Pillar** (`Recon`, `Purpose`, `Architecture`, `Flows`, `Evolution`) in the top bar.
-- Open the **Map** popover to view mastery progress across core pillars and custom topics you've asked about, and click any topic to revisit or deepen it.
+- Hover over (or pin open) the **Left Toolbar** to access:
+  - **Knowledge Base (`KB`):** View the number of indexed files and symbols, check git sync status, or click the refresh button (`↻`) to re-scan on demand.
+  - **Knowledge Map (`Map`):** Inspect mastery progress across core pillars, click any **Scanned Architecture Module** to learn how it works, or revisit custom topics you've explored.
+  - **Progress (`Progress`):** Open the **Sessions & Progress modal** to view cumulative mastery across all repositories, switch between saved sessions, or start a fresh session.
+  - **Depth (`Depth`):** Switch between `Auto`, `Foundational`, `Intermediate`, and `Advanced` teaching depth.
 - Reply to inline **Quick Check** questions to reinforce or advance mastery, click any **Suggested Next Step** card, or type any question directly (*"Teach me how `pathGuard.ts` works"*, *"Walk through the SSE chat flow over time"*).
-- Click the **Tool Activity pill** above any response to inspect the exact read-only files and git commands Scavenger grounded its answer in.
+- Click the **Tool Activity pill** above any response to inspect the exact read-only files, knowledge map queries, and git commands Scavenger grounded its answer in.
 
 ### 4. Inspect & Export Visuals
 Every diagram and concept visual renders directly inline as an interactive studio card:
-- **Sketch / Clean toggle** (Mermaid): Switch between crisp architectural vector styling and hand-drawn whiteboard sketch mode.
+- **Sketch / Clean toggle** (Mermaid): Switch between crisp architectural vector styling and hand-drawn whiteboard sketch mode (automatically adapted to **Light** or **Dark** theme).
 - **Expand (Lightbox):** Inspect dense diagrams full-screen with zoom (`+`, `-`, `0`, `Ctrl/⌘ + scroll`), click-and-drag panning, and `Esc` to close.
 - **Export:** Download crisp **SVG**, **2× Retina PNG**, or copy raw diagram source with one click.
 
@@ -145,7 +157,7 @@ Scavenger is designed so you can point it at important local repositories with c
 - **Filesystem confinement ([`pathGuard.ts`](src/server/guardrails/pathGuard.ts)):** Every agent tool (`list_tree`, `read_file`, `grep_search`) resolves canonical `fs.realpath` paths strictly inside the chosen repository root — blocking `../` traversal, external absolute paths, null bytes, symlink escapes outside the repo, and direct `.git/` internal file reads.
 - **Lock-free, shell-free Git ([`gitGuard.ts`](src/server/guardrails/gitGuard.ts)):** Runs `execFile('git', ...)` with `shell: false`, enforces a strict read-only subcommand allowlist (`log`, `show`, `diff`, `blame`, `shortlog`, `status`, `rev-parse`, `branch --list`, `tag --list`, `ls-files`), blocks mutating flags, and injects `GIT_OPTIONAL_LOCKS=0` so even `git status` never writes `.git/index.lock`.
 - **Read-only folder browser ([`dirBrowser.ts`](src/server/tools/dirBrowser.ts)):** Lists directory metadata only (never reads file contents), caps listings at 500 entries, and detects `.git` markers without spawning subprocesses.
-- **Local-only secret storage ([`settingsStore.ts`](src/server/settingsStore.ts)):** API keys stay on your machine in `~/.scavenger/config.json` (`0600`) and are never echoed back in API responses.
+- **Local-only secret & session storage ([`settingsStore.ts`](src/server/settingsStore.ts), [`knowledgeStore.ts`](src/server/knowledge/knowledgeStore.ts), [`sessionStore.ts`](src/server/session/sessionStore.ts)):** API keys (`~/.scavenger/config.json`), scanned knowledge maps (`~/.scavenger/knowledge/`), and saved sessions (`~/.scavenger/sessions/`) stay on your machine with `0600` permissions and auto-generated `.gitignore` protection, and raw secrets are never echoed back in API responses.
 
 ---
 
@@ -154,25 +166,30 @@ Scavenger is designed so you can point it at important local repositories with c
 ```mermaid
 flowchart LR
   subgraph Client["React + Vite Client (src/client)"]
-    UI["RepoWelcome · Chat UI\nKnowledge Map · Composer"]
-    Modals["FileExplorerModal\nSettingsModal · VisualLightbox"]
-    Mermaid["Mermaid Studio Theme\n(Clean/Sketch · SVG/PNG Export)"]
+    UI["RepoWelcome · StageProgressBar\nLeftToolbar · ChatMessageList · Composer"]
+    Modals["FileExplorerModal · SettingsModal\nSessionsProgressModal · VisualLightbox"]
+    Mermaid["Mermaid & Concept Visual Studio\n(Light/Dark · Clean/Sketch · SVG/PNG Export)"]
   end
 
   subgraph Server["Hono Node Server (src/server)"]
     Routes["REST & SSE Routes\n/sessions · /chat · /fs · /settings · /render"]
+    Scanner["Pre-Onboarding Knowledge Scanner\nstaticIndexer · scannerAgent · gitWatcher"]
     Orch["Orchestrator & Pedagogy\n(Vercel AI SDK + Demo Agent)"]
-    Store["settingsStore (~/.scavenger/config.json)\nsessionStore · learningEngine"]
+    Store["Local Stores (~/.scavenger/)\nsettingsStore · knowledgeStore · sessionStore"]
     Guards["Read-Only Guardrails\npathGuard · gitGuard · dirBrowser"]
-    Tools["Read-Only Inspection & Visuals\nfsTools · gitTools · rootRecon · visualTools"]
+    Tools["Read-Only Inspection & 3-Tier Visuals\nfsTools · gitTools · rootRecon · visualTools"]
   end
 
   UI <-->|"REST + SSE Stream"| Routes
   Modals <-->|"REST"| Routes
+  Routes --> Scanner
   Routes --> Orch
   Routes --> Store
   Routes --> Guards
+  Scanner --> Store
+  Scanner --> Guards
   Orch --> Tools
+  Orch --> Store
   Tools --> Guards
   Orch -->|"Visual Artifacts"| Mermaid
 ```
@@ -180,54 +197,66 @@ flowchart LR
 ```text
 src/
 ├── shared/
-│   └── types.ts                   # Shared domain, learning, visual, browse & settings types
+│   └── types.ts                   # Shared domain, knowledge map, session, visual & settings types
 ├── server/
 │   ├── index.ts                   # Hono entrypoint, /api/health & static production serving
 │   ├── config.ts                  # Provider-agnostic Vercel AI SDK model resolver
+│   ├── copilotAuth.ts             # GitHub Copilot token discovery, Device Flow & live model list
 │   ├── settingsStore.ts           # Persistent local config store (~/.scavenger/config.json)
 │   ├── guardrails/
 │   │   ├── pathGuard.ts           # Canonical realpath repo confinement & symlink defense
 │   │   └── gitGuard.ts            # Lock-free, shell-free read-only git allowlist
+│   ├── knowledge/
+│   │   ├── staticIndexer.ts       # Fast read-only AST/regex symbol, import & entrypoint indexer
+│   │   ├── scannerAgent.ts        # Hybrid static + LLM repository knowledge map synthesizer
+│   │   ├── knowledgeStore.ts      # Persistent knowledge cache (~/.scavenger/knowledge/)
+│   │   └── gitWatcher.ts          # HEAD SHA tracker & git diff incremental refresh detector
 │   ├── tools/
 │   │   ├── fsTools.ts             # Read-only list_tree, read_file, grep_search
 │   │   ├── gitTools.ts            # Read-only git_inspect wrapper
 │   │   ├── dirBrowser.ts          # Read-only local directory browser for FileExplorerModal
 │   │   ├── rootRecon.ts           # Deterministic Stage 0 root reconnaissance
-│   │   ├── visualTools.ts         # D2 CLI renderer, raster prompts & multi-layout SVG composer
-│   │   └── agentTools.ts          # Vercel AI SDK tool suite bound to session state
+│   │   ├── visualTools.ts         # D2 CLI renderer & 3-tier multimodal/LLM-SVG/vector concept engine
+│   │   └── agentTools.ts          # Vercel AI SDK tool suite (incl. query_knowledge_map)
 │   ├── session/
-│   │   ├── sessionStore.ts        # In-memory session store & Stage 0 opening composer
+│   │   ├── sessionStore.ts        # Persistent session store (~/.scavenger/sessions/) & cross-session progress
 │   │   ├── learningEngine.ts      # Non-linear topic mastery, check-ins & next-step engine
 │   │   └── stageMachine.ts        # Stage progression & depth calibration heuristics
 │   ├── agent/
-│   │   ├── pedagogy.ts            # Whiteboard Mentor 5-beat teaching framework
-│   │   ├── systemPrompt.ts        # Grounded architect persona & visual guidelines
+│   │   ├── pedagogy.ts            # Whiteboard Mentor 5-beat teaching framework & highlighter rules
+│   │   ├── systemPrompt.ts        # Grounded architect persona, knowledge digest & visual guidelines
 │   │   ├── orchestrator.ts        # Multi-step streaming agent loop (SSE)
 │   │   └── demoAgent.ts           # Grounded zero-key local demo responder
 │   └── routes/
-│       ├── sessions.ts            # POST/GET/PATCH /api/sessions
+│       ├── sessions.ts            # Session CRUD, SSE scan init, knowledge status & refresh routes
 │       ├── chat.ts                # POST /api/sessions/:id/chat (SSE)
 │       ├── fs.ts                  # GET /api/fs/browse
-│       ├── settings.ts            # GET/PUT /api/settings & POST /api/settings/test
+│       ├── settings.ts            # Settings CRUD, connection test & Copilot Device Flow routes
 │       └── visuals.ts             # POST /api/render/d2
 └── client/
-    ├── App.tsx                    # Minimalist chat shell, session state & SSE consumer
+    ├── App.tsx                    # Minimalist chat shell, session restoration & SSE consumer
     ├── api/client.ts              # Typed REST & SSE API client
-    ├── utils/mermaidTheme.ts      # Curated Mermaid v12 theme, lightbox SVG prep & PNG/SVG export
-    ├── styles/index.css           # Gemini-inspired minimalist design system
+    ├── utils/
+    │   ├── highlightMarkdown.ts   # Transforms ==highlight== syntax into realistic marker callouts
+    │   ├── mermaidTheme.ts        # Light/Dark Mermaid v12 theme, lightbox SVG prep & PNG/SVG export
+    │   └── theme.ts               # Persistent Light/Dark theme state & DOM attribute sync
+    ├── styles/index.css           # Gemini-inspired design system with variable font typography
     └── components/
-        ├── RepoWelcome.tsx        # Distraction-free landing screen with Browse & quick actions
+        ├── RepoWelcome.tsx        # Landing screen with Browse, scan progress & recent sessions
         ├── FileExplorerModal.tsx  # Local folder picker with breadcrumbs, filter & Git badges
         ├── SettingsModal.tsx      # 3-tab Settings UI (Models, API Keys, Visuals & Safety)
-        ├── StageProgressBar.tsx   # Top bar with Pillar rail, Knowledge Map & Depth selector
-        ├── ChatMessageList.tsx    # Centered prose stream with inline visuals & tool pills
+        ├── SessionsProgressModal.tsx # Cross-session repository mastery & session history modal
+        ├── StageProgressBar.tsx   # Top bar with Repo pill, Core Pillar rail, Theme & Settings
+        ├── LeftToolbar.tsx        # Auto-collapsing left rail for KB, Knowledge Map, Progress & Depth
+        ├── ThemeToggleButton.tsx  # 1-click Light / Dark mode toggle button
+        ├── ChatMessageList.tsx    # Reading-first prose stream with scroll-down cue & inline visuals
         ├── LessonFooter.tsx       # Inline Quick Check card & clickable Next Steps cards
-        ├── MarkdownRenderer.tsx   # Intercepts fenced mermaid/d2 blocks into DiagramCards
+        ├── MarkdownRenderer.tsx   # Markdown renderer with yellow highlights & DiagramCard interception
         ├── DiagramCard.tsx        # Mermaid/D2 studio card with Clean/Sketch toggle & export
-        ├── ConceptVisualCard.tsx  # Raster artwork + legend or editorial vector concept card
+        ├── ConceptVisualCard.tsx  # Multimodal artwork, bespoke LLM SVG or vector concept card
         ├── VisualLightbox.tsx     # Shared interactive zoom & drag-to-pan fullscreen lightbox
         ├── ToolActivityPill.tsx   # Collapsible grounded read-only inspection summary
-        └── Composer.tsx           # Floating pill composer with contextual learning nudges
+        └── Composer.tsx           # Floating pill composer with live phased progress banner & nudges
 ```
 
 ---
@@ -237,18 +266,24 @@ src/
 | Script | Description |
 | --- | --- |
 | `pnpm dev` | Run backend (`tsx watch`, port `3001`) and frontend (`vite`, port `5173`) concurrently |
-| `pnpm test` | Run all 11 Vitest suites (49 tests) |
+| `pnpm test` | Run all 17 Vitest suites (80 tests) |
 | `pnpm typecheck` | Run TypeScript typechecking (`tsc --noEmit`) |
 | `pnpm build` | Build production client (`dist/client`) and server (`dist/server`) |
 | `pnpm start` | Run the compiled production server |
 
 ### Test Coverage (`tests/`)
 
-- `pathGuard.test.ts` — Blocks `../` traversal, external absolute paths, null bytes, `.git/` direct reads, and symlink escapes.
+- `pathGuard.test.ts` — Blocks `../` traversal, external absolute paths, null bytes, `.git/` and `.scavenger/` direct reads, and symlink escapes.
 - `gitGuard.test.ts` — Enforces read-only git allowlists and rejects mutating subcommands and dangerous flags.
 - `fsAndGitTools.test.ts` — Proves zero repository mutations (`git status --porcelain` clean, `HEAD` unchanged, no `.git/index.lock`).
 - `dirBrowser.test.ts` — Verifies read-only directory browsing, `.git` repo/worktree detection, hidden folders, symlinks, breadcrumbs, fallback, and HTTP error codes.
-- `settingsStore.test.ts` — Verifies masked key responses, `0600` local config persistence, `.env` override/fallback, key preservation across model edits, and connection testing.
-- `visualFallback.test.ts` — Verifies `pipeline`/`hub`/`layers` SVG concept layouts, word-boundary wrapping, unique `<defs>` IDs, and D2 graceful degradation.
+- `knowledgeScanner.test.ts` — Verifies static symbol/import indexing, architecture synthesis, persistent knowledge storage (`0600` + `.gitignore`), `git pull` incremental refresh, and `query_knowledge_map`.
+- `sessionPersistence.test.ts` — Verifies disk persistence (`~/.scavenger/sessions/`), session restoration, deletion, cross-session mastery aggregation, and left toolbar controls.
+- `settingsStore.test.ts` — Verifies masked key responses, `0600` local config persistence, `.env` override/fallback, GitHub Copilot auth/domain configuration, and connection testing.
+- `visualFallback.test.ts` — Verifies the 3-tier concept visual pipeline (native multimodal image output, bespoke active-LLM SVG generation & sanitization, and deterministic `pipeline`/`hub`/`layers` vector fallback) plus D2 graceful degradation.
+- `highlightMarkdown.test.ts` — Verifies `==key idea==` yellow highlighter transformation, bold normalization inside highlights, and code fence/inline code protection.
+- `composerProgress.test.ts` — Verifies live composer status banner phases, elapsed timer formatting, and read-only tool activity pills while waiting for model responses.
+- `chatScrollCue.test.ts` — Verifies reading-first streaming behavior (no forced auto-scroll during token streaming) and the floating scroll-down arrow indicator.
+- `themeToggle.test.ts` — Verifies Light/Dark theme persistence, `data-theme` attribute synchronization, and dark-aware Mermaid diagram palettes.
 - `rootRecon.test.ts` — Verifies Stage 0 root reconnaissance on git and non-git directories.
 - `stageMachine.test.ts`, `learningEngine.test.ts`, `pedagogy.test.ts`, `chatStream.test.ts` — Verify non-linear mastery progression, Whiteboard Mentor pedagogy, SSE flushing, and grounded Demo Mode end-to-end.
