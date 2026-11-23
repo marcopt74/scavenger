@@ -1,12 +1,15 @@
 import {
   AlertCircle,
   CheckCircle2,
+  Copy,
   Cpu,
+  ExternalLink,
   Eye,
   EyeOff,
   KeyRound,
   Loader2,
   PlugZap,
+  RefreshCw,
   ShieldCheck,
   Sparkles,
   Trash2,
@@ -16,14 +19,23 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { PROVIDER_MODEL_PRESETS } from '../../shared/types';
 import type {
+  CopilotDeviceFlowStartResponse,
   HealthInfo,
   ProviderId,
+  ProviderModelPreset,
   ProviderSelection,
   PublicSettings,
   TestConnectionResult,
   UpdateSettingsPayload,
 } from '../../shared/types';
-import { fetchSettings, saveSettings, testProviderConnection } from '../api/client';
+import {
+  fetchCopilotModels,
+  fetchSettings,
+  pollCopilotDeviceFlow,
+  saveSettings,
+  startCopilotDeviceFlow,
+  testProviderConnection,
+} from '../api/client';
 
 interface SettingsModalProps {
   health: HealthInfo | null;
@@ -36,6 +48,7 @@ type SettingsTab = 'models' | 'keys' | 'visuals';
 type RealProviderId = Exclude<ProviderId, 'demo'>;
 
 const REAL_PROVIDERS: readonly RealProviderId[] = [
+  'copilot',
   'google',
   'openai',
   'anthropic',
@@ -43,6 +56,7 @@ const REAL_PROVIDERS: readonly RealProviderId[] = [
 ];
 
 const ALL_PROVIDERS: readonly ProviderId[] = [
+  'copilot',
   'google',
   'openai',
   'anthropic',
@@ -54,6 +68,12 @@ const PROVIDER_META: Record<
   ProviderId,
   { name: string; subtitle: string; keyPlaceholder: string; keyHint: string }
 > = {
+  copilot: {
+    name: 'GitHub Copilot',
+    subtitle: 'GPT-4.1 · Claude Sonnet 4 · Gemini 2.5 Pro',
+    keyPlaceholder: 'ghu_… or gho_… (or click Sign in with GitHub)',
+    keyHint: 'Auto-detects local Copilot IDE/CLI auth, or sign in via GitHub Device Flow',
+  },
   google: {
     name: 'Google Gemini',
     subtitle: 'Gemini 2.5 Flash / Pro',
@@ -102,30 +122,49 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
   // Editable form state
   const [activeProvider, setActiveProvider] = useState<ProviderId>(provider.provider);
   const [models, setModels] = useState<Record<RealProviderId, string>>({
+    copilot: PROVIDER_MODEL_PRESETS.copilot[0].id,
     google: PROVIDER_MODEL_PRESETS.google[0].id,
     openai: PROVIDER_MODEL_PRESETS.openai[0].id,
     anthropic: PROVIDER_MODEL_PRESETS.anthropic[0].id,
     'openai-compatible': PROVIDER_MODEL_PRESETS['openai-compatible'][0].id,
   });
-  const [compatBaseUrl, setCompatBaseUrl] = useState(provider.baseUrl || '');
+  const [compatBaseUrl, setCompatBaseUrl] = useState(
+    provider.provider === 'openai-compatible' ? provider.baseUrl || '' : ''
+  );
+  const [copilotDomain, setCopilotDomain] = useState(
+    provider.provider === 'copilot' ? provider.baseUrl || '' : ''
+  );
   const [apiKeyDrafts, setApiKeyDrafts] = useState<Record<RealProviderId, string>>({
+    copilot: '',
     google: '',
     openai: '',
     anthropic: '',
     'openai-compatible': '',
   });
   const [clearKeys, setClearKeys] = useState<Record<RealProviderId, boolean>>({
+    copilot: false,
     google: false,
     openai: false,
     anthropic: false,
     'openai-compatible': false,
   });
   const [revealedKeys, setRevealedKeys] = useState<Record<RealProviderId, boolean>>({
+    copilot: false,
     google: false,
     openai: false,
     anthropic: false,
     'openai-compatible': false,
   });
+
+  // Dynamic GitHub Copilot models & Device Flow state
+  const [copilotModels, setCopilotModels] = useState<readonly ProviderModelPreset[]>(
+    PROVIDER_MODEL_PRESETS.copilot
+  );
+  const [copilotModelsSource, setCopilotModelsSource] = useState<'live' | 'presets'>('presets');
+  const [loadingCopilotModels, setLoadingCopilotModels] = useState(false);
+  const [deviceFlow, setDeviceFlow] = useState<CopilotDeviceFlowStartResponse | null>(null);
+  const [deviceStarting, setDeviceStarting] = useState(false);
+  const [deviceCopied, setDeviceCopied] = useState(false);
 
   // Visual settings state
   const [imageGenEnabled, setImageGenEnabled] = useState(true);
@@ -139,6 +178,22 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
   // Prevent closing modal when a text-selection drag starts inside the panel and ends on the backdrop
   const backdropMouseDownRef = useRef(false);
 
+  async function loadCopilotModelCatalog(refresh = false, domainOverride?: string) {
+    setLoadingCopilotModels(true);
+    try {
+      const effectiveDomain = domainOverride !== undefined ? domainOverride : copilotDomain;
+      const res = await fetchCopilotModels(refresh, effectiveDomain);
+      if (res.models.length > 0) {
+        setCopilotModels(res.models);
+        setCopilotModelsSource(res.source);
+      }
+    } catch {
+      // Keep existing presets on transient error
+    } finally {
+      setLoadingCopilotModels(false);
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -148,6 +203,10 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
         setSettings(loaded);
         setActiveProvider(provider.provider || loaded.activeProvider);
         setModels({
+          copilot:
+            provider.provider === 'copilot' && provider.model
+              ? provider.model
+              : loaded.providers.copilot.model,
           google:
             provider.provider === 'google' && provider.model
               ? provider.model
@@ -170,10 +229,19 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
             loaded.providers['openai-compatible'].baseUrl ??
             ''
         );
+        const initialCopilotDomain =
+          (provider.provider === 'copilot' ? provider.baseUrl : undefined) ??
+          loaded.providers.copilot.baseUrl ??
+          '';
+        setCopilotDomain(initialCopilotDomain);
         setImageGenEnabled(loaded.visuals.imageGenEnabled);
         setGeminiImageModel(loaded.visuals.geminiImageModel);
         setOpenaiImageModel(loaded.visuals.openaiImageModel);
         setLoading(false);
+
+        if (loaded.providers.copilot.ready) {
+          void loadCopilotModelCatalog(false, initialCopilotDomain);
+        }
       })
       .catch((err) => {
         if (cancelled) return;
@@ -187,6 +255,97 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
     // Load once on open so prop refreshes never wipe in-progress edits
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!deviceFlow) return;
+    let cancelled = false;
+    let pollIntervalMs = Math.max(deviceFlow.interval || 5, 3) * 1000;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const flowDomain = deviceFlow.domain || copilotDomain.trim() || undefined;
+
+    const tick = async () => {
+      if (cancelled) return;
+      try {
+        const res = await pollCopilotDeviceFlow(deviceFlow.deviceCode, flowDomain);
+        if (cancelled) return;
+
+        if (res.status === 'complete' && res.settings && res.health) {
+          setSettings(res.settings);
+          setActiveProvider('copilot');
+          const savedDomain = res.settings.providers.copilot.baseUrl || '';
+          setCopilotDomain(savedDomain);
+          setClearKeys((prev) => ({ ...prev, copilot: false }));
+          setApiKeyDrafts((prev) => ({ ...prev, copilot: '' }));
+          setDeviceFlow(null);
+          setTestResult({
+            ok: true,
+            provider: 'copilot',
+            model: models.copilot,
+            latencyMs: 0,
+            message: `Signed in with GitHub Copilot${savedDomain ? ` (${savedDomain})` : ''}. Fetching available models…`,
+          });
+          onSaved(
+            {
+              provider: 'copilot',
+              model: models.copilot || res.settings.providers.copilot.model,
+              baseUrl: savedDomain || undefined,
+            },
+            res.health
+          );
+          void loadCopilotModelCatalog(true, savedDomain);
+          return;
+        }
+
+        if (res.status === 'slow_down') {
+          pollIntervalMs = Math.max((res.interval || 10) * 1000, pollIntervalMs + 5000);
+        } else if (res.status === 'expired' || res.status === 'denied') {
+          setDeviceFlow(null);
+          setError(res.message || 'GitHub Copilot sign-in did not complete.');
+          return;
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setDeviceFlow(null);
+        setError(err instanceof Error ? err.message : 'GitHub Copilot device sign-in failed.');
+        return;
+      }
+
+      if (!cancelled) {
+        timer = setTimeout(() => void tick(), pollIntervalMs);
+      }
+    };
+
+    timer = setTimeout(() => void tick(), pollIntervalMs);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deviceFlow]);
+
+  async function handleStartDeviceFlow() {
+    setDeviceStarting(true);
+    setError(null);
+    setTestResult(null);
+    try {
+      const started = await startCopilotDeviceFlow(copilotDomain.trim() || undefined);
+      setDeviceFlow(started);
+      setDeviceCopied(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not start GitHub Copilot sign-in.');
+    } finally {
+      setDeviceStarting(false);
+    }
+  }
+
+  function handleCopyDeviceCode(code: string) {
+    if (navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(code).then(() => {
+        setDeviceCopied(true);
+        setTimeout(() => setDeviceCopied(false), 2000);
+      });
+    }
+  }
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -220,10 +379,16 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
     setError(null);
     try {
       const isReal = activeProvider !== 'demo';
+      const baseUrlForTest =
+        activeProvider === 'openai-compatible'
+          ? compatBaseUrl.trim() || undefined
+          : activeProvider === 'copilot'
+            ? copilotDomain.trim() || undefined
+            : undefined;
       const result = await testProviderConnection({
         provider: activeProvider,
         model: isReal ? models[activeProvider].trim() || undefined : undefined,
-        baseUrl: activeProvider === 'openai-compatible' ? compatBaseUrl.trim() || undefined : undefined,
+        baseUrl: baseUrlForTest,
         apiKey: isReal ? apiKeyDrafts[activeProvider].trim() || undefined : undefined,
       });
       setTestResult(result);
@@ -247,6 +412,12 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
     const payload: UpdateSettingsPayload = {
       activeProvider,
       providers: {
+        copilot: {
+          model: models.copilot.trim(),
+          baseUrl: copilotDomain.trim(),
+          apiKey: apiKeyDrafts.copilot.trim() || undefined,
+          clearApiKey: clearKeys.copilot || undefined,
+        },
         google: {
           model: models.google.trim(),
           apiKey: apiKeyDrafts.google.trim() || undefined,
@@ -282,7 +453,10 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
       const nextSelection: ProviderSelection = {
         provider: activeProvider,
         model: selectedCfg.model,
-        baseUrl: activeProvider === 'openai-compatible' ? selectedCfg.baseUrl : undefined,
+        baseUrl:
+          activeProvider === 'openai-compatible' || activeProvider === 'copilot'
+            ? selectedCfg.baseUrl
+            : undefined,
       };
       onSaved(nextSelection, nextHealth);
       onClose();
@@ -308,6 +482,13 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
     if (cfg?.keySource === 'env') {
       return <span className="secret-status-pill source-env">From .env</span>;
     }
+    if (cfg?.keySource === 'local') {
+      return (
+        <span className="secret-status-pill source-local">
+          Auto-detected ({cfg.sourceDetail || 'local'})
+        </span>
+      );
+    }
     return (
       <span className="secret-status-pill source-none">
         {id === 'openai-compatible' ? 'Optional' : 'Not set'}
@@ -315,8 +496,62 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
     );
   }
 
+  function renderCopilotDeviceFlowBox() {
+    if (!deviceFlow) return null;
+    const hostLabel = deviceFlow.domain && deviceFlow.domain !== 'github.com'
+      ? deviceFlow.domain
+      : 'GitHub';
+    return (
+      <div className="copilot-device-box" role="region" aria-label="GitHub Copilot Device Login">
+        <div className="copilot-device-top">
+          <span>
+            Enter this one-time code on <strong>{hostLabel}</strong> to authorize Scavenger with your Copilot account:
+          </span>
+          <button
+            type="button"
+            className="settings-link-btn"
+            onClick={() => setDeviceFlow(null)}
+          >
+            Cancel
+          </button>
+        </div>
+        <div className="copilot-device-code-row">
+          <code className="copilot-device-code">{deviceFlow.userCode}</code>
+          <button
+            type="button"
+            className="chip-button"
+            onClick={() => handleCopyDeviceCode(deviceFlow.userCode)}
+          >
+            <Copy size={13} />
+            <span>{deviceCopied ? 'Copied!' : 'Copy code'}</span>
+          </button>
+          <a
+            href={deviceFlow.verificationUri}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="primary-pill-btn copilot-device-link"
+          >
+            <span>Open {hostLabel}</span>
+            <ExternalLink size={13} />
+          </a>
+        </div>
+        <div className="copilot-device-waiting">
+          <Loader2 size={13} className="explorer-spinner" />
+          <span>Waiting for authorization on {deviceFlow.verificationUri}…</span>
+        </div>
+      </div>
+    );
+  }
+
   const activeRealProvider: RealProviderId | null =
     activeProvider === 'demo' ? null : activeProvider;
+
+  const activeProviderPresets: readonly ProviderModelPreset[] =
+    activeRealProvider === 'copilot'
+      ? copilotModels
+      : activeRealProvider
+        ? PROVIDER_MODEL_PRESETS[activeRealProvider]
+        : [];
 
   const isRemoteCompatEndpoint =
     activeRealProvider === 'openai-compatible' &&
@@ -438,12 +673,113 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
 
                 {activeRealProvider && (
                   <>
+                    {activeRealProvider === 'copilot' && (
+                      <>
+                        <div className="field-group">
+                          <label className="field-label" htmlFor="copilot-domain-input">
+                            GitHub Domain <span className="model-source-note">(leave blank for github.com, or enter your Enterprise / GHE domain)</span>
+                          </label>
+                          <div className="secret-input-wrap">
+                            <input
+                              id="copilot-domain-input"
+                              type="text"
+                              className="field-input field-mono secret-input"
+                              value={copilotDomain}
+                              onChange={(e) => {
+                                setCopilotDomain(e.target.value);
+                                setDeviceFlow(null);
+                                setTestResult(null);
+                              }}
+                              placeholder="github.com (or e.g. company.ghe.com / github.company.com)"
+                              autoComplete="off"
+                              spellCheck={false}
+                            />
+                            {copilotDomain && (
+                              <button
+                                type="button"
+                                className="secret-eye-btn"
+                                onClick={() => {
+                                  setCopilotDomain('');
+                                  setDeviceFlow(null);
+                                  setTestResult(null);
+                                }}
+                                title="Reset to github.com"
+                                aria-label="Reset to github.com"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="copilot-auth-bar">
+                          <div className="copilot-auth-status">
+                            <span className="field-label" style={{ marginBottom: 0 }}>
+                              Copilot Authentication
+                            </span>
+                            {renderKeyBadge('copilot')}
+                            {settings?.providers.copilot.maskedKey && !clearKeys.copilot && (
+                              <span className="secret-masked-tag">
+                                {settings.providers.copilot.maskedKey}
+                              </span>
+                            )}
+                          </div>
+                          <div className="copilot-auth-actions">
+                            <button
+                              type="button"
+                              className="chip-button"
+                              disabled={deviceStarting || Boolean(deviceFlow)}
+                              onClick={() => void handleStartDeviceFlow()}
+                            >
+                              {deviceStarting ? (
+                                <Loader2 size={13} className="explorer-spinner" />
+                              ) : (
+                                <KeyRound size={13} />
+                              )}
+                              <span>
+                                {isProviderEffectivelyReady('copilot')
+                                  ? `Re-sign in (${copilotDomain.trim() || 'github.com'})`
+                                  : `Sign in with GitHub (${copilotDomain.trim() || 'github.com'})`}
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {activeRealProvider === 'copilot' && renderCopilotDeviceFlowBox()}
+
                     <div className="field-group">
-                      <label className="field-label" htmlFor="active-model-input">
-                        Model for {PROVIDER_META[activeRealProvider].name}
-                      </label>
+                      <div className="field-label-row">
+                        <label className="field-label" htmlFor="active-model-input">
+                          Model for {PROVIDER_META[activeRealProvider].name}
+                          {activeRealProvider === 'copilot' && (
+                            <span className="model-source-note">
+                              {copilotModelsSource === 'live'
+                                ? ` · ${copilotModels.length} live from your Copilot subscription`
+                                : ' · presets'}
+                            </span>
+                          )}
+                        </label>
+                        {activeRealProvider === 'copilot' && isProviderEffectivelyReady('copilot') && (
+                          <button
+                            type="button"
+                            className="settings-link-btn"
+                            disabled={loadingCopilotModels}
+                            onClick={() => void loadCopilotModelCatalog(true)}
+                            title="Fetch models enabled on your GitHub Copilot account"
+                          >
+                            <RefreshCw
+                              size={12}
+                              className={loadingCopilotModels ? 'explorer-spinner' : ''}
+                              style={{ marginRight: 4, verticalAlign: '-1px' }}
+                            />
+                            <span>{loadingCopilotModels ? 'Refreshing…' : 'Refresh models'}</span>
+                          </button>
+                        )}
+                      </div>
                       <div className="model-presets-row">
-                        {PROVIDER_MODEL_PRESETS[activeRealProvider].map((preset) => {
+                        {activeProviderPresets.map((preset) => {
                           const isChosen = models[activeRealProvider].trim() === preset.id;
                           return (
                             <button
@@ -474,7 +810,8 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
                           placeholder={
                             activeRealProvider === 'openai-compatible' && isRemoteCompatEndpoint
                               ? 'e.g. anthropic/claude-sonnet-4 or google/gemini-2.5-flash'
-                              : PROVIDER_MODEL_PRESETS[activeRealProvider][0].id
+                              : (activeProviderPresets[0]?.id ??
+                                PROVIDER_MODEL_PRESETS[activeRealProvider][0].id)
                           }
                           autoComplete="off"
                           spellCheck={false}
@@ -655,6 +992,42 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
                             </span>
                           )}
                         </div>
+
+                        {id === 'copilot' && (
+                          <div className="copilot-keys-actions">
+                            <div className="field-group" style={{ width: '100%', marginBottom: 4 }}>
+                              <label className="field-label" htmlFor="keys-copilot-domain-input">
+                                GitHub Domain (optional — for organizational / Enterprise GitHub)
+                              </label>
+                              <input
+                                id="keys-copilot-domain-input"
+                                className="field-input field-mono"
+                                value={copilotDomain}
+                                onChange={(e) => {
+                                  setCopilotDomain(e.target.value);
+                                  setDeviceFlow(null);
+                                }}
+                                placeholder="github.com (or e.g. company.ghe.com / github.company.com)"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              className="chip-button"
+                              disabled={deviceStarting || Boolean(deviceFlow)}
+                              onClick={() => void handleStartDeviceFlow()}
+                            >
+                              {deviceStarting ? (
+                                <Loader2 size={13} className="explorer-spinner" />
+                              ) : (
+                                <KeyRound size={13} />
+                              )}
+                              <span>
+                                Sign in with GitHub Device Flow ({copilotDomain.trim() || 'github.com'})
+                              </span>
+                            </button>
+                            {renderCopilotDeviceFlowBox()}
+                          </div>
+                        )}
 
                         {id === 'openai-compatible' && (
                           <div className="field-group" style={{ marginBottom: 8 }}>

@@ -4,11 +4,13 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import type { LanguageModel } from 'ai';
 import type { ProviderId, ProviderSelection } from '../shared/types.js';
+import { createCopilotFetch, DEFAULT_COPILOT_API_BASE } from './copilotAuth.js';
 import {
   DEFAULT_MODELS,
   getEffectiveApiKey,
   getEffectiveBaseUrl,
   getEffectiveConfiguredProviders,
+  getEffectiveCopilotDomain,
   getEffectiveDefaultProviderSelection,
   getEffectiveModel,
 } from './settingsStore.js';
@@ -37,6 +39,26 @@ export function resolveLanguageModel(
   switch (selection.provider) {
     case 'demo':
       return null;
+
+    case 'copilot': {
+      const apiKey = overrides?.apiKey?.trim() || getEffectiveApiKey('copilot').value;
+      if (!apiKey) {
+        throw new Error(
+          'GitHub Copilot authentication is missing. Sign in with GitHub Copilot in Settings (gear icon), authenticate via GitHub Copilot IDE/CLI, set GITHUB_COPILOT_TOKEN in .env, or switch to Demo mode.'
+        );
+      }
+      const customDomain =
+        overrides?.baseUrl?.trim() ||
+        selection.baseUrl?.trim() ||
+        getEffectiveCopilotDomain().value;
+      const copilot = createOpenAICompatible({
+        name: 'copilot',
+        baseURL: DEFAULT_COPILOT_API_BASE,
+        apiKey: 'copilot-session',
+        fetch: createCopilotFetch(apiKey, customDomain),
+      });
+      return copilot.chatModel(modelId);
+    }
 
     case 'google': {
       const apiKey = overrides?.apiKey?.trim() || getEffectiveApiKey('google').value;

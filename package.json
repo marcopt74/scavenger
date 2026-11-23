@@ -5,10 +5,10 @@
   "type": "module",
   "description": "Read-only Repository Onboarding Agent with a minimalist Gemini-inspired chat interface",
   "scripts": {
-    "dev": "concurrently -n server,client -c cyan,magenta \"pnpm run dev:server\" \"pnpm run dev:client\"",
+    "dev": "concurrently -n server,client -c cyan,magenta \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "tsx watch src/server/index.ts",
     "dev:client": "vite",
-    "build": "pnpm run build:client && pnpm run build:server",
+    "build": "npm run build:client && npm run build:server",
     "build:client": "vite build",
     "build:server": "tsc -p tsconfig.server.json",
     "start": "node dist/server/server/index.js",

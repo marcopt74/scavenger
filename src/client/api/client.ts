@@ -1,4 +1,7 @@
 import type {
+  CopilotDeviceFlowPollResponse,
+  CopilotDeviceFlowStartResponse,
+  CopilotModelsResponse,
   DirectoryBrowseResponse,
   HealthInfo,
   OnboardingStage,
@@ -67,6 +70,57 @@ export async function testProviderConnection(
     latencyMs: data.latencyMs ?? 0,
     message: data.message ?? (data.ok ? 'Connected.' : 'Connection failed.'),
   };
+}
+
+export async function fetchCopilotModels(
+  refresh = false,
+  domain?: string
+): Promise<CopilotModelsResponse> {
+  const params = new URLSearchParams();
+  if (refresh) params.set('refresh', 'true');
+  if (domain?.trim()) params.set('domain', domain.trim());
+  const query = params.toString();
+  const res = await fetch(`/api/settings/copilot/models${query ? `?${query}` : ''}`);
+  const data = (await res.json()) as Partial<CopilotModelsResponse> & { error?: string };
+  if (!res.ok || !Array.isArray(data.models)) {
+    throw new Error(data.error || `Failed to load Copilot models (${res.status})`);
+  }
+  return {
+    models: data.models,
+    source: data.source === 'live' ? 'live' : 'presets',
+    error: data.error,
+  };
+}
+
+export async function startCopilotDeviceFlow(
+  domain?: string
+): Promise<CopilotDeviceFlowStartResponse> {
+  const res = await fetch('/api/settings/copilot/device/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ domain: domain?.trim() || undefined }),
+  });
+  const data = (await res.json()) as Partial<CopilotDeviceFlowStartResponse> & { error?: string };
+  if (!res.ok || !data.deviceCode || !data.userCode || !data.verificationUri) {
+    throw new Error(data.error || `Failed to start GitHub Copilot sign-in (${res.status})`);
+  }
+  return data as CopilotDeviceFlowStartResponse;
+}
+
+export async function pollCopilotDeviceFlow(
+  deviceCode: string,
+  domain?: string
+): Promise<CopilotDeviceFlowPollResponse> {
+  const res = await fetch('/api/settings/copilot/device/poll', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ deviceCode, domain: domain?.trim() || undefined }),
+  });
+  const data = (await res.json()) as Partial<CopilotDeviceFlowPollResponse> & { error?: string };
+  if (!res.ok || !data.status) {
+    throw new Error(data.error || `Device sign-in check failed (${res.status})`);
+  }
+  return data as CopilotDeviceFlowPollResponse;
 }
 
 export async function browseDirectory(

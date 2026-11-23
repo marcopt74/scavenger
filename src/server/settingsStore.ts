@@ -10,8 +10,10 @@ import type {
   SecretSource,
   UpdateSettingsPayload,
 } from '../shared/types.js';
+import { discoverLocalCopilotToken, resetCopilotCaches } from './copilotAuth.js';
 
 export const DEFAULT_MODELS: Record<ProviderId, string> = {
+  copilot: 'gpt-4.1',
   google: 'gemini-2.5-flash',
   openai: 'gpt-4o',
   anthropic: 'claude-sonnet-4-20250514',
@@ -39,6 +41,7 @@ interface StoredSettingsFile {
 }
 
 const VALID_PROVIDERS: readonly ProviderId[] = [
+  'copilot',
   'google',
   'openai',
   'anthropic',
@@ -60,6 +63,7 @@ export function getSettingsFilePath(): string {
 export function resetSettingsCache(): void {
   cachedPath = null;
   cachedData = null;
+  resetCopilotCaches();
 }
 
 function readStoredSettings(): StoredSettingsFile {
@@ -127,6 +131,13 @@ export function maskApiKey(key: string): string {
 
 function getEnvApiKey(provider: Exclude<ProviderId, 'demo'>): string | undefined {
   switch (provider) {
+    case 'copilot':
+      return (
+        process.env.GITHUB_COPILOT_TOKEN ||
+        process.env.COPILOT_GITHUB_TOKEN ||
+        process.env.GH_COPILOT_TOKEN ||
+        ''
+      ).trim() || undefined;
     case 'google':
       return (process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY || '').trim() || undefined;
     case 'openai':
@@ -138,9 +149,31 @@ function getEnvApiKey(provider: Exclude<ProviderId, 'demo'>): string | undefined
   }
 }
 
+export function getEffectiveCopilotDomain(): { value?: string; source: SecretSource } {
+  const stored = readStoredSettings();
+  const storedDomain = stored.providers?.copilot?.baseUrl?.trim();
+  if (storedDomain) {
+    return { value: storedDomain, source: 'settings' };
+  }
+  const envDomain = (
+    process.env.GITHUB_COPILOT_DOMAIN ||
+    process.env.GITHUB_ENTERPRISE_URL ||
+    ''
+  ).trim();
+  if (envDomain) {
+    return { value: envDomain, source: 'env' };
+  }
+  const discovered = discoverLocalCopilotToken();
+  if (discovered?.domain && discovered.domain !== 'github.com') {
+    return { value: discovered.domain, source: 'local' };
+  }
+  return { value: undefined, source: 'none' };
+}
+
 export function getEffectiveApiKey(provider: ProviderId): {
   value?: string;
   source: SecretSource;
+  sourceDetail?: string;
 } {
   if (provider === 'demo') {
     return { value: undefined, source: 'none' };
@@ -153,6 +186,20 @@ export function getEffectiveApiKey(provider: ProviderId): {
   const envKey = getEnvApiKey(provider);
   if (envKey) {
     return { value: envKey, source: 'env' };
+  }
+  if (provider === 'copilot') {
+    const preferredDomain =
+      stored.providers?.copilot?.baseUrl?.trim() ||
+      (process.env.GITHUB_COPILOT_DOMAIN || process.env.GITHUB_ENTERPRISE_URL || '').trim() ||
+      undefined;
+    const discovered = discoverLocalCopilotToken(preferredDomain);
+    if (discovered) {
+      return {
+        value: discovered.token,
+        source: 'local',
+        sourceDetail: discovered.sourceDetail,
+      };
+    }
   }
   return { value: undefined, source: 'none' };
 }
@@ -189,6 +236,7 @@ export function getEffectiveModel(provider: ProviderId): string {
 
 export function getEffectiveConfiguredProviders(): Record<ProviderId, boolean> {
   return {
+    copilot: Boolean(getEffectiveApiKey('copilot').value),
     google: Boolean(getEffectiveApiKey('google').value),
     openai: Boolean(getEffectiveApiKey('openai').value),
     anthropic: Boolean(getEffectiveApiKey('anthropic').value),
@@ -201,13 +249,19 @@ export function getEffectiveDefaultProviderSelection(): ProviderSelection {
   const stored = readStoredSettings();
   const configured = getEffectiveConfiguredProviders();
 
+  const resolveProviderBaseUrl = (id: ProviderId): string | undefined => {
+    if (id === 'openai-compatible') return getEffectiveBaseUrl().value;
+    if (id === 'copilot') return getEffectiveCopilotDomain().value;
+    return undefined;
+  };
+
   if (stored.activeProvider && VALID_PROVIDERS.includes(stored.activeProvider)) {
     const active = stored.activeProvider;
     if (active === 'demo' || configured[active]) {
       return {
         provider: active,
         model: getEffectiveModel(active),
-        baseUrl: active === 'openai-compatible' ? getEffectiveBaseUrl().value : undefined,
+        baseUrl: resolveProviderBaseUrl(active),
       };
     }
   }
@@ -218,17 +272,17 @@ export function getEffectiveDefaultProviderSelection(): ProviderSelection {
       return {
         provider: envProvider,
         model: getEffectiveModel(envProvider),
-        baseUrl: envProvider === 'openai-compatible' ? getEffectiveBaseUrl().value : undefined,
+        baseUrl: resolveProviderBaseUrl(envProvider),
       };
     }
   }
 
-  for (const candidate of ['google', 'openai', 'anthropic', 'openai-compatible'] as const) {
+  for (const candidate of ['copilot', 'google', 'openai', 'anthropic', 'openai-compatible'] as const) {
     if (configured[candidate]) {
       return {
         provider: candidate,
         model: getEffectiveModel(candidate),
-        baseUrl: candidate === 'openai-compatible' ? getEffectiveBaseUrl().value : undefined,
+        baseUrl: resolveProviderBaseUrl(candidate),
       };
     }
   }
@@ -287,7 +341,12 @@ export function getPublicSettings(capabilities: { d2Available: boolean }): Publi
 
   const buildProviderPublic = (id: ProviderId): ProviderPublicConfig => {
     const keyInfo = getEffectiveApiKey(id);
-    const baseUrlInfo = id === 'openai-compatible' ? getEffectiveBaseUrl() : undefined;
+    const baseUrlInfo =
+      id === 'openai-compatible'
+        ? getEffectiveBaseUrl()
+        : id === 'copilot'
+          ? getEffectiveCopilotDomain()
+          : undefined;
     return {
       provider: id,
       model: getEffectiveModel(id),
@@ -295,6 +354,7 @@ export function getPublicSettings(capabilities: { d2Available: boolean }): Publi
       hasKey: Boolean(keyInfo.value),
       maskedKey: keyInfo.value ? maskApiKey(keyInfo.value) : undefined,
       keySource: keyInfo.source,
+      sourceDetail: keyInfo.sourceDetail,
       ready: configured[id],
     };
   };
@@ -302,6 +362,7 @@ export function getPublicSettings(capabilities: { d2Available: boolean }): Publi
   return {
     activeProvider: selection.provider,
     providers: {
+      copilot: buildProviderPublic('copilot'),
       google: buildProviderPublic('google'),
       openai: buildProviderPublic('openai'),
       anthropic: buildProviderPublic('anthropic'),
@@ -332,7 +393,7 @@ export function updateStoredSettings(patch: UpdateSettingsPayload): StoredSettin
   }
 
   if (patch.providers) {
-    const providerIds = ['google', 'openai', 'anthropic', 'openai-compatible'] as const;
+    const providerIds = ['copilot', 'google', 'openai', 'anthropic', 'openai-compatible'] as const;
     for (const id of providerIds) {
       const update = patch.providers[id];
       if (!update) continue;
@@ -345,7 +406,7 @@ export function updateStoredSettings(patch: UpdateSettingsPayload): StoredSettin
         else delete existing.model;
       }
 
-      if (id === 'openai-compatible' && update.baseUrl !== undefined) {
+      if ((id === 'openai-compatible' || id === 'copilot') && update.baseUrl !== undefined) {
         const trimmed = update.baseUrl.trim();
         if (trimmed) existing.baseUrl = trimmed;
         else delete existing.baseUrl;

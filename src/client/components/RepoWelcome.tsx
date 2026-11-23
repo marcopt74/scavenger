@@ -102,6 +102,7 @@ export function RepoWelcome({
               {provider.model ? ` (${provider.model})` : ''}
               {provider.provider === 'demo' &&
               health &&
+              !health.configuredProviders.copilot &&
               !health.configuredProviders.google &&
               !health.configuredProviders.openai &&
               !health.configuredProviders.anthropic &&

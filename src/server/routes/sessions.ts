@@ -12,7 +12,7 @@ import { runRootRecon } from '../tools/rootRecon.js';
 
 const providerSchema = z
   .object({
-    provider: z.enum(['google', 'openai', 'anthropic', 'openai-compatible', 'demo']),
+    provider: z.enum(['copilot', 'google', 'openai', 'anthropic', 'openai-compatible', 'demo']),
     model: z.string().optional(),
     baseUrl: z.string().optional(),
   })

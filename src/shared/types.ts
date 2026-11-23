@@ -68,7 +68,13 @@ export const STAGE_TO_PILLAR: Record<OnboardingStage, CorePillarId> = {
 
 export type UserLevel = 'uncalibrated' | 'foundational' | 'intermediate' | 'advanced';
 
-export type ProviderId = 'google' | 'openai' | 'anthropic' | 'openai-compatible' | 'demo';
+export type ProviderId =
+  | 'copilot'
+  | 'google'
+  | 'openai'
+  | 'anthropic'
+  | 'openai-compatible'
+  | 'demo';
 
 export interface ProviderSelection {
   provider: ProviderId;
@@ -257,7 +263,7 @@ export interface HealthInfo {
   suggestedRepoPath: string;
 }
 
-export type SecretSource = 'settings' | 'env' | 'none';
+export type SecretSource = 'settings' | 'env' | 'local' | 'none';
 
 export interface ProviderModelPreset {
   id: string;
@@ -266,6 +272,13 @@ export interface ProviderModelPreset {
 }
 
 export const PROVIDER_MODEL_PRESETS: Record<ProviderId, readonly ProviderModelPreset[]> = {
+  copilot: [
+    { id: 'gpt-4.1', label: 'GPT-4.1', note: 'GitHub Copilot default' },
+    { id: 'gpt-4o', label: 'GPT-4o', note: 'Fast & versatile' },
+    { id: 'claude-sonnet-4', label: 'Claude Sonnet 4', note: 'Architectural clarity' },
+    { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', note: 'Deep reasoning' },
+    { id: 'o3-mini', label: 'o3-mini', note: 'Reasoning model' },
+  ],
   google: [
     { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', note: 'Fast & balanced' },
     { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', note: 'Deep reasoning' },
@@ -299,7 +312,31 @@ export interface ProviderPublicConfig {
   hasKey: boolean;
   maskedKey?: string;
   keySource: SecretSource;
+  sourceDetail?: string;
   ready: boolean;
+}
+
+export interface CopilotModelsResponse {
+  models: ProviderModelPreset[];
+  source: 'live' | 'presets';
+  error?: string;
+}
+
+export interface CopilotDeviceFlowStartResponse {
+  deviceCode: string;
+  userCode: string;
+  verificationUri: string;
+  expiresIn: number;
+  interval: number;
+  domain?: string;
+}
+
+export interface CopilotDeviceFlowPollResponse {
+  status: 'pending' | 'slow_down' | 'complete' | 'expired' | 'denied';
+  interval?: number;
+  message?: string;
+  settings?: PublicSettings;
+  health?: HealthInfo;
 }
 
 export interface VisualPublicSettings {

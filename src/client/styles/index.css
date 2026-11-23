@@ -2723,6 +2723,107 @@ select {
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 4px;
+  max-height: 176px;
+  overflow-y: auto;
+}
+
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.model-source-note {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.copilot-auth-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-page);
+}
+
+.copilot-auth-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.copilot-auth-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.copilot-keys-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.copilot-device-box {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: #f5f9ff;
+  border: 1px solid rgba(26, 115, 232, 0.3);
+  font-size: 12.5px;
+}
+
+.copilot-device-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+
+.copilot-device-code-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.copilot-device-code {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 5px 12px;
+  border-radius: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
+}
+
+.copilot-device-link {
+  text-decoration: none;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.copilot-device-waiting {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 11.5px;
 }
 
 .model-preset-chip {
@@ -2922,6 +3023,11 @@ select {
 .secret-status-pill.source-env {
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+.secret-status-pill.source-local {
+  background: #e0f2fe;
+  color: #0369a1;
 }
 
 .secret-status-pill.source-pending {
