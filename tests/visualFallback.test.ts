@@ -29,6 +29,8 @@ describe('visualTools (D2 graceful degradation & editorial concept visuals)', ()
     });
 
     expect(svg.startsWith('<svg')).toBe(true);
+    expect(svg).toContain('text-rendering="geometricPrecision"');
+    expect(svg).toContain('font-optical-sizing: auto;');
     expect(svg).toContain('Request Pipeline Mental Model');
     expect(svg).toContain('Guardrails');
     expect(svg).toContain('</svg>');

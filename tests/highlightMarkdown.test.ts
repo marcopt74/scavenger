@@ -76,4 +76,17 @@ describe('MarkdownRenderer yellow highlighter effect (remarkHighlighter)', () =>
     expect(html).toContain('Outer modules handle changing inputs and presentation, while inner modules guard core invariants.');
     expect(html).toContain('<strong>dependency direction across module boundaries</strong>');
   });
+
+  it('applies single-layer .prose.is-streaming class when streaming without duplicate nested .prose wrappers', () => {
+    const html = renderToStaticMarkup(
+      createElement(MarkdownRenderer, {
+        content: 'Streaming live explanation with `inlineCode` and *italic* emphasis',
+        isStreaming: true,
+      })
+    );
+
+    expect(html.startsWith('<div class="prose is-streaming">')).toBe(true);
+    expect(html).toContain('<code>inlineCode</code>');
+    expect(html).toContain('<em>italic</em>');
+  });
 });

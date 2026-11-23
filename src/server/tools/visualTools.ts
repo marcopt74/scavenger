@@ -227,7 +227,7 @@ function buildBespokeSvgPrompt(
     ``,
     `Design Requirements:`,
     `- Canvas: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 420" role="img">`,
-    `- Light editorial aesthetic: warm alabaster card background (#F8FAFC to #FFFFFF), crisp slate typography (#0F172A headings, #475569 descriptions), rounded cards (rx="14"), subtle vector icons/glyphs, and directional connectors.`,
+    `- Light editorial aesthetic: warm alabaster card background (#F8FAFC to #FFFFFF), crisp slate typography (#0F172A headings, #334155 descriptions, text-rendering="geometricPrecision", font-family="Inter, -apple-system, BlinkMacSystemFont, sans-serif"), rounded cards (rx="14"), subtle vector icons/glyphs, and directional connectors.`,
     `- Include the title, metaphor subtitle, and all ${elements.length} labeled element cards with non-overlapping coordinates inside 880x420.`,
     `- Strictly NO <script> tags, NO event handler attributes (onload/onclick), and NO external images or stylesheets.`,
   ].join('\n');
@@ -953,8 +953,18 @@ export function buildFallbackConceptSvg(input: ConceptVisualInput): string {
   const badgeText = LAYOUT_BADGE_LABELS[layout];
   const badgeW = Math.round(Math.max(150, badgeText.length * 7.6 + 38));
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${totalHeight}" role="img" aria-label="${escapeXml(input.title)}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${totalHeight}" text-rendering="geometricPrecision" shape-rendering="geometricPrecision" role="img" aria-label="${escapeXml(input.title)}">
   <defs>
+    <style>
+      text {
+        font-optical-sizing: auto;
+        font-kerning: normal;
+        font-feature-settings: 'cv02' 1, 'cv03' 1, 'cv04' 1, 'cv05' 1, 'cv08' 1, 'cv11' 1, 'ss01' 1, 'calt' 1, 'liga' 1, 'kern' 1;
+        text-rendering: geometricPrecision;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+    </style>
     <pattern id="dots-${uid}" width="20" height="20" patternUnits="userSpaceOnUse">
       <circle cx="2" cy="2" r="1" fill="#CBD5E1" fill-opacity="0.55" />
     </pattern>

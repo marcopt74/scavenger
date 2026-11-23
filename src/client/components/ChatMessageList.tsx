@@ -91,10 +91,7 @@ export function ChatMessageList({
               )}
 
               {streamingText ? (
-                <div className="prose">
-                  <MarkdownRenderer content={streamingText} />
-                  <span className="streaming-cursor" />
-                </div>
+                <MarkdownRenderer content={streamingText} isStreaming />
               ) : (
                 <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
                   Preparing grounded response<span className="streaming-cursor" />

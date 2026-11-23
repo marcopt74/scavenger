@@ -12,6 +12,29 @@ const SEMANTIC_CLASS_DEFS: Record<string, string> = {
 };
 
 const EDITORIAL_THEME_CSS = `
+  svg,
+  text,
+  tspan,
+  .label,
+  .nodeLabel,
+  .edgeLabel,
+  .cluster-label,
+  .messageText,
+  .noteText {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    text-rendering: geometricPrecision !important;
+    -webkit-font-smoothing: antialiased !important;
+    -moz-osx-font-smoothing: grayscale !important;
+    font-feature-settings: 'cv02' 1, 'cv03' 1, 'cv04' 1, 'cv05' 1, 'cv08' 1, 'cv11' 1, 'ss01' 1, 'calt' 1, 'liga' 1, 'kern' 1 !important;
+    font-kerning: normal !important;
+  }
+  .node .label text,
+  .nodeLabel {
+    fill: #0F172A !important;
+    color: #0F172A !important;
+    font-weight: 540 !important;
+    letter-spacing: -0.01em !important;
+  }
   .node rect,
   .node polygon,
   .node circle {
