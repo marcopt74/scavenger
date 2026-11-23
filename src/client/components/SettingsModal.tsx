@@ -168,6 +168,7 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
 
   // Visual settings state
   const [imageGenEnabled, setImageGenEnabled] = useState(true);
+  const [useActiveModelForVisuals, setUseActiveModelForVisuals] = useState(true);
   const [geminiImageModel, setGeminiImageModel] = useState('imagen-3.0-generate-002');
   const [openaiImageModel, setOpenaiImageModel] = useState('gpt-image-1');
 
@@ -235,6 +236,7 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
           '';
         setCopilotDomain(initialCopilotDomain);
         setImageGenEnabled(loaded.visuals.imageGenEnabled);
+        setUseActiveModelForVisuals(loaded.visuals.useActiveModelForVisuals ?? true);
         setGeminiImageModel(loaded.visuals.geminiImageModel);
         setOpenaiImageModel(loaded.visuals.openaiImageModel);
         setLoading(false);
@@ -442,6 +444,7 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
       },
       visuals: {
         imageGenEnabled,
+        useActiveModelForVisuals,
         geminiImageModel: geminiImageModel.trim(),
         openaiImageModel: openaiImageModel.trim(),
       },
@@ -1121,8 +1124,8 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
                   <div className="toggle-copy">
                     <span className="toggle-title">AI Concept Image Generation</span>
                     <span className="toggle-desc">
-                      Uses your Gemini or OpenAI API key to generate editorial illustrations for mental models.
-                      When disabled (or without a key), Scavenger renders fast multi-layout vector concept maps.
+                      Generates editorial illustrations or bespoke architectural SVGs for mental models.
+                      When disabled (or in Demo mode), Scavenger renders fast multi-layout vector concept maps.
                     </span>
                   </div>
                   <button
@@ -1137,32 +1140,60 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
                 </div>
 
                 {imageGenEnabled && (
-                  <div className="visual-models-grid">
-                    <div className="field-group">
-                      <label className="field-label" htmlFor="gemini-img-model">
-                        Gemini Image Model
-                      </label>
-                      <input
-                        id="gemini-img-model"
-                        className="field-input field-mono"
-                        value={geminiImageModel}
-                        onChange={(e) => setGeminiImageModel(e.target.value)}
-                        placeholder="imagen-3.0-generate-002"
-                      />
+                  <>
+                    <div className="toggle-card">
+                      <div className="toggle-copy">
+                        <span className="toggle-title">Use active chat model for concept visuals</span>
+                        <span className="toggle-desc">
+                          Leverages your active session provider (
+                          <strong>{PROVIDER_META[activeProvider].name}</strong>
+                          {activeRealProvider
+                            ? ` · ${models[activeRealProvider] || PROVIDER_MODEL_PRESETS[activeRealProvider][0].id}`
+                            : ''}
+                          ) first for native multimodal image output or bespoke inline{' '}
+                          <code>&lt;svg viewBox=&quot;0 0 880 420&quot;&gt;</code> illustrations before
+                          falling back to dedicated image endpoints or offline templates.
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-label="Use active chat model for concept visuals"
+                        aria-checked={useActiveModelForVisuals}
+                        className={`toggle-switch ${useActiveModelForVisuals ? 'on' : ''}`}
+                        onClick={() => setUseActiveModelForVisuals((v) => !v)}
+                      >
+                        <span className="toggle-thumb" />
+                      </button>
                     </div>
-                    <div className="field-group">
-                      <label className="field-label" htmlFor="openai-img-model">
-                        OpenAI Image Model
-                      </label>
-                      <input
-                        id="openai-img-model"
-                        className="field-input field-mono"
-                        value={openaiImageModel}
-                        onChange={(e) => setOpenaiImageModel(e.target.value)}
-                        placeholder="gpt-image-1"
-                      />
+
+                    <div className="visual-models-grid">
+                      <div className="field-group">
+                        <label className="field-label" htmlFor="gemini-img-model">
+                          Gemini Image Model (Fallback)
+                        </label>
+                        <input
+                          id="gemini-img-model"
+                          className="field-input field-mono"
+                          value={geminiImageModel}
+                          onChange={(e) => setGeminiImageModel(e.target.value)}
+                          placeholder="imagen-3.0-generate-002"
+                        />
+                      </div>
+                      <div className="field-group">
+                        <label className="field-label" htmlFor="openai-img-model">
+                          OpenAI Image Model (Fallback)
+                        </label>
+                        <input
+                          id="openai-img-model"
+                          className="field-input field-mono"
+                          value={openaiImageModel}
+                          onChange={(e) => setOpenaiImageModel(e.target.value)}
+                          placeholder="gpt-image-1"
+                        />
+                      </div>
                     </div>
-                  </div>
+                  </>
                 )}
 
                 <div className="info-box">
@@ -1181,9 +1212,13 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
                     ? 'installed'
                     : 'not installed, fallback ready'}
                   ) · Concept images (
-                  {(settings?.visuals.imageGenAvailable ?? health?.imageGenAvailable)
-                    ? 'API ready'
-                    : 'editorial vector mode'}
+                  {!imageGenEnabled
+                    ? 'editorial vector mode'
+                    : useActiveModelForVisuals && activeProvider !== 'demo' && isProviderEffectivelyReady(activeProvider)
+                      ? `active model (${PROVIDER_META[activeProvider].name})`
+                      : (settings?.visuals.imageGenAvailable ?? health?.imageGenAvailable)
+                        ? 'API ready'
+                        : 'editorial vector mode'}
                   ).
                 </div>
               </>

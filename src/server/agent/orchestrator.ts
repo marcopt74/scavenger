@@ -54,7 +54,10 @@ export async function runOnboardingTurn(
     });
   }
 
-  const activeProvider = providerOverride ?? session.provider;
+  if (providerOverride) {
+    session.provider = providerOverride;
+  }
+  const activeProvider = session.provider;
   const visuals: VisualArtifact[] = [];
   const toolActivities: ToolActivity[] = [];
   let turnCheckInQuestions: CheckInQuestion[] | undefined;

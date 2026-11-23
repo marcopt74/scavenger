@@ -468,18 +468,21 @@ async function buildReinforcementLesson(
     `Built clearer mental model for ${topicTitle}`,
     topicTitle,
     () =>
-      generateConceptVisual({
-        title: `${topicTitle} — Core Mental Model`,
-        metaphor: `Picture ${topicTitle} as a three-stage relay: validate at the door, transform in the middle, hand back a clean contract.`,
-        caption: 'Simplified whiteboard view showing cause-and-effect before implementation syntax.',
-        layout: 'pipeline',
-        accent: 'emerald',
-        elements: [
-          { label: 'Entry Gate', role: 'Receives raw trigger & checks rules' },
-          { label: topicTitle.slice(0, 22), role: 'Performs one focused transformation' },
-          { label: 'Caller Contract', role: 'Returns a predictable, typed output' },
-        ],
-      })
+      generateConceptVisual(
+        {
+          title: `${topicTitle} — Core Mental Model`,
+          metaphor: `Picture ${topicTitle} as a three-stage relay: validate at the door, transform in the middle, hand back a clean contract.`,
+          caption: 'Simplified whiteboard view showing cause-and-effect before implementation syntax.',
+          layout: 'pipeline',
+          accent: 'emerald',
+          elements: [
+            { label: 'Entry Gate', role: 'Receives raw trigger & checks rules' },
+            { label: topicTitle.slice(0, 22), role: 'Performs one focused transformation' },
+            { label: 'Caller Contract', role: 'Returns a predictable, typed output' },
+          ],
+        },
+        session.provider
+      )
   );
   callbacks.recordVisual(conceptVisual);
   callbacks.emit({ type: 'visual', visual: conceptVisual });
@@ -552,18 +555,21 @@ async function buildPillarLesson(
       `Created domain mental model for ${recon.repoName}`,
       recon.repoName,
       () =>
-        generateConceptVisual({
-          title: `${recon.repoName} — Why This System Exists`,
-          metaphor: `Root configs define the rules of the workshop; top-level directories separate the craftsmen so each layer stays focused.`,
-          caption: 'Domain boundaries inferred directly from repository root artifacts.',
-          layout: 'layers',
-          accent: 'cobalt',
-          elements: [
-            { label: manifests[0] ?? 'Root Contracts', role: 'Build scripts, toolchain & dependency boundaries' },
-            { label: dirs[0] ? `${dirs[0]}/` : 'Core Source', role: 'Primary runtime architecture & domain behavior' },
-            { label: recon.repoName, role: recon.detectedStack.slice(0, 3).join(' · ') || 'Delivered product surface' },
-          ],
-        })
+        generateConceptVisual(
+          {
+            title: `${recon.repoName} — Why This System Exists`,
+            metaphor: `Root configs define the rules of the workshop; top-level directories separate the craftsmen so each layer stays focused.`,
+            caption: 'Domain boundaries inferred directly from repository root artifacts.',
+            layout: 'layers',
+            accent: 'cobalt',
+            elements: [
+              { label: manifests[0] ?? 'Root Contracts', role: 'Build scripts, toolchain & dependency boundaries' },
+              { label: dirs[0] ? `${dirs[0]}/` : 'Core Source', role: 'Primary runtime architecture & domain behavior' },
+              { label: recon.repoName, role: recon.detectedStack.slice(0, 3).join(' · ') || 'Delivered product surface' },
+            ],
+          },
+          session.provider
+        )
     );
     callbacks.recordVisual(conceptVisual);
     callbacks.emit({ type: 'visual', visual: conceptVisual });

@@ -509,6 +509,7 @@ export interface CopilotDeviceFlowPollResponse {
 
 export interface VisualPublicSettings {
   imageGenEnabled: boolean;
+  useActiveModelForVisuals: boolean;
   geminiImageModel: string;
   openaiImageModel: string;
   imageGenAvailable: boolean;
@@ -534,6 +535,7 @@ export interface UpdateSettingsPayload {
   providers?: Partial<Record<Exclude<ProviderId, 'demo'>, ProviderUpdateInput>>;
   visuals?: {
     imageGenEnabled?: boolean;
+    useActiveModelForVisuals?: boolean;
     geminiImageModel?: string;
     openaiImageModel?: string;
   };

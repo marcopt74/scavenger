@@ -438,7 +438,10 @@ export function createAgentTools(session: InternalSession, ctx: ToolContextCallb
       }),
       execute: async ({ title, metaphor, caption, layout, accent, elements }) =>
         runTracked('generate_concept_visual', `Generated concept visual: ${title}`, title, async () => {
-          const artifact = await generateConceptVisual({ title, metaphor, caption, layout, accent, elements });
+          const artifact = await generateConceptVisual(
+            { title, metaphor, caption, layout, accent, elements },
+            session.provider
+          );
           ctx.recordVisual(artifact);
           ctx.emit({ type: 'visual', visual: artifact });
           return {

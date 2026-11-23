@@ -35,6 +35,7 @@ interface StoredSettingsFile {
   providers?: Partial<Record<Exclude<ProviderId, 'demo'>, StoredProviderEntry>>;
   visuals?: {
     imageGenEnabled?: boolean;
+    useActiveModelForVisuals?: boolean;
     geminiImageModel?: string;
     openaiImageModel?: string;
   };
@@ -295,6 +296,7 @@ export function getEffectiveDefaultProviderSelection(): ProviderSelection {
 
 export interface EffectiveVisualSettings {
   imageGenEnabled: boolean;
+  useActiveModelForVisuals: boolean;
   geminiImageModel: string;
   openaiImageModel: string;
   geminiApiKey?: string;
@@ -310,6 +312,11 @@ export function getEffectiveVisualSettings(): EffectiveVisualSettings {
       ? stored.visuals.imageGenEnabled
       : process.env.IMAGE_GEN_ENABLED !== 'false';
 
+  const useActiveModelForVisuals =
+    typeof stored.visuals?.useActiveModelForVisuals === 'boolean'
+      ? stored.visuals.useActiveModelForVisuals
+      : process.env.VISUAL_USE_ACTIVE_MODEL !== 'false';
+
   const geminiImageModel =
     stored.visuals?.geminiImageModel?.trim() ||
     process.env.GEMINI_IMAGE_MODEL?.trim() ||
@@ -322,10 +329,15 @@ export function getEffectiveVisualSettings(): EffectiveVisualSettings {
 
   const geminiApiKey = getEffectiveApiKey('google').value;
   const openaiApiKey = getEffectiveApiKey('openai').value;
-  const imageGenAvailable = imageGenEnabled && Boolean(geminiApiKey || openaiApiKey);
+  const activeSelection = getEffectiveDefaultProviderSelection();
+  const hasActiveNonDemoProvider =
+    useActiveModelForVisuals && activeSelection.provider !== 'demo';
+  const imageGenAvailable =
+    imageGenEnabled && Boolean(geminiApiKey || openaiApiKey || hasActiveNonDemoProvider);
 
   return {
     imageGenEnabled,
+    useActiveModelForVisuals,
     geminiImageModel,
     openaiImageModel,
     geminiApiKey,
@@ -371,6 +383,7 @@ export function getPublicSettings(capabilities: { d2Available: boolean }): Publi
     },
     visuals: {
       imageGenEnabled: visuals.imageGenEnabled,
+      useActiveModelForVisuals: visuals.useActiveModelForVisuals,
       geminiImageModel: visuals.geminiImageModel,
       openaiImageModel: visuals.openaiImageModel,
       imageGenAvailable: visuals.imageGenAvailable,
@@ -429,6 +442,9 @@ export function updateStoredSettings(patch: UpdateSettingsPayload): StoredSettin
   if (patch.visuals) {
     if (typeof patch.visuals.imageGenEnabled === 'boolean') {
       next.visuals!.imageGenEnabled = patch.visuals.imageGenEnabled;
+    }
+    if (typeof patch.visuals.useActiveModelForVisuals === 'boolean') {
+      next.visuals!.useActiveModelForVisuals = patch.visuals.useActiveModelForVisuals;
     }
     if (patch.visuals.geminiImageModel !== undefined) {
       const trimmed = patch.visuals.geminiImageModel.trim();

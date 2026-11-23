@@ -1,12 +1,19 @@
 import { execFile } from 'node:child_process';
 import crypto from 'node:crypto';
+import { generateText } from 'ai';
 import type {
   ConceptVisualAccent,
   ConceptVisualElement,
   ConceptVisualLayout,
+  ProviderSelection,
   VisualArtifact,
 } from '../../shared/types.js';
-import { getEffectiveVisualSettings } from '../settingsStore.js';
+import { resolveLanguageModel } from '../config.js';
+import {
+  getEffectiveDefaultProviderSelection,
+  getEffectiveModel,
+  getEffectiveVisualSettings,
+} from '../settingsStore.js';
 
 let cachedD2Available: boolean | null = null;
 
@@ -120,20 +127,316 @@ function buildEditorialImagePrompt(input: ConceptVisualInput, layout: ConceptVis
 }
 
 /**
- * Generates an optional metaphor/concept visual via Gemini Imagen or OpenAI Images when configured,
- * falling back cleanly to a bespoke editorial multi-layout inline SVG concept illustration.
+ * Checks whether the configured provider + model supports native multimodal raster image output
+ * in Tier 1 (e.g. Google Gemini via `:generateContent` with `responseModalities: ["IMAGE", "TEXT"]`,
+ * or OpenAI image-capable models).
  */
-export async function generateConceptVisual(input: ConceptVisualInput): Promise<VisualArtifact> {
+export function supportsNativeImageOutput(selection?: ProviderSelection): boolean {
+  if (!selection || selection.provider === 'demo') {
+    return false;
+  }
+  const modelId = (selection.model?.trim() || getEffectiveModel(selection.provider)).toLowerCase();
+  if (selection.provider === 'google') {
+    return /^gemini-/i.test(modelId);
+  }
+  if (selection.provider === 'openai') {
+    return /^(gpt-image|dall-e|gpt-4o|chatgpt-4o)/i.test(modelId);
+  }
+  return false;
+}
+
+/**
+ * Extracts and sanitizes an inline `<svg>` element from LLM output, stripping `<script>`,
+ * `<foreignObject>`, `<iframe>`, `javascript:` URIs, and `on*` event handler attributes,
+ * while guaranteeing `xmlns` and `viewBox="0 0 880 420"` when omitted.
+ */
+export function sanitizeConceptSvg(raw: string): string | null {
+  if (!raw || typeof raw !== 'string') {
+    return null;
+  }
+
+  const match = raw.match(/<svg\b[\s\S]*?<\/svg>/i);
+  if (!match) {
+    return null;
+  }
+
+  let svg = match[0].trim();
+
+  // Strip executable or embedding elements
+  svg = svg
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<script\b[^>]*\/>/gi, '')
+    .replace(/<foreignObject\b[^>]*>[\s\S]*?<\/foreignObject>/gi, '')
+    .replace(/<foreignObject\b[^>]*\/>/gi, '')
+    .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, '')
+    .replace(/<iframe\b[^>]*\/>/gi, '')
+    .replace(/<object\b[^>]*>[\s\S]*?<\/object>/gi, '')
+    .replace(/<embed\b[^>]*\/?>/gi, '');
+
+  // Strip inline event handler attributes (onload, onclick, onerror, onmouseover, etc.)
+  svg = svg.replace(/\s+on[a-z0-9_-]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s/>]+)/gi, '');
+
+  // Strip javascript: URIs in href / xlink:href
+  svg = svg.replace(
+    /\s+(?:xlink:)?href\s*=\s*(?:"\s*javascript:[^"]*"|'\s*javascript:[^']*'|javascript:[^\s/>]+)/gi,
+    ''
+  );
+
+  // Ensure root <svg> has xmlns and viewBox
+  svg = svg.replace(/^<svg\b([^>]*)>/i, (_full, attrs: string) => {
+    let nextAttrs = attrs;
+    if (!/\bxmlns\s*=/i.test(nextAttrs)) {
+      nextAttrs = ` xmlns="http://www.w3.org/2000/svg"${nextAttrs}`;
+    }
+    if (!/\bviewBox\s*=/i.test(nextAttrs)) {
+      nextAttrs = `${nextAttrs} viewBox="0 0 880 420"`;
+    }
+    return `<svg${nextAttrs}>`;
+  });
+
+  if (!/^<svg\b/i.test(svg) || !/<\/svg>$/i.test(svg)) {
+    return null;
+  }
+
+  return svg;
+}
+
+export const sanitizeSvgMarkup = sanitizeConceptSvg;
+
+function buildBespokeSvgPrompt(
+  input: ConceptVisualInput,
+  layout: ConceptVisualLayout,
+  accent: ConceptVisualAccent
+): string {
+  const palette = ACCENT_PALETTES[accent];
+  const elements = normalizeElements(input.elements);
+  const elementsList = elements
+    .map((el, i) => `${i + 1}. "${el.label}" — ${el.role}`)
+    .join('\n');
+
+  return [
+    `You are an expert technical illustrator creating a bespoke, self-contained architectural concept SVG diagram.`,
+    `Return ONLY valid inline SVG markup starting with <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 420" role="img" aria-label="${escapeXml(input.title)}"> and ending with </svg>. Do not wrap in markdown fences or add prose.`,
+    ``,
+    `Title: ${input.title}`,
+    `Architectural Metaphor: ${input.metaphor}`,
+    `Layout Composition: ${layout} (${layout === 'layers' ? 'stacked horizontal strata with vertical connectors' : layout === 'hub' ? 'central focal anchor connected to satellite nodes' : 'left-to-right sequential flow of stations with directional arrows'})`,
+    `Accent Palette: primary=${palette.primary}, softFill=${palette.primarySoft}, border=${palette.primaryBorder}`,
+    `Key Conceptual Elements to Illustrate & Label Clearly:`,
+    elementsList,
+    ``,
+    `Design Requirements:`,
+    `- Canvas: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 420" role="img">`,
+    `- Light editorial aesthetic: warm alabaster card background (#F8FAFC to #FFFFFF), crisp slate typography (#0F172A headings, #475569 descriptions), rounded cards (rx="14"), subtle vector icons/glyphs, and directional connectors.`,
+    `- Include the title, metaphor subtitle, and all ${elements.length} labeled element cards with non-overlapping coordinates inside 880x420.`,
+    `- Strictly NO <script> tags, NO event handler attributes (onload/onclick), and NO external images or stylesheets.`,
+  ].join('\n');
+}
+
+/**
+ * Uses the active session LLM (`resolveLanguageModel(providerSelection)`) to generate a bespoke,
+ * valid, self-contained `<svg viewBox="0 0 880 420">` concept illustration when raster image
+ * output is unavailable.
+ */
+export async function generateBespokeConceptSvgWithLlm(
+  input: ConceptVisualInput,
+  providerSelection: ProviderSelection
+): Promise<string | null> {
+  if (!providerSelection || providerSelection.provider === 'demo') {
+    return null;
+  }
+
+  const languageModel = resolveLanguageModel(providerSelection);
+  if (!languageModel) {
+    return null;
+  }
+
+  const layout = inferConceptLayout(input);
+  const accent = inferConceptAccent(input);
+  const elements = normalizeElements(input.elements);
+  const prompt = buildBespokeSvgPrompt({ ...input, layout, accent, elements }, layout, accent);
+
+  const result = await generateText({
+    model: languageModel,
+    prompt,
+    maxOutputTokens: 2400,
+    temperature: 0.3,
+    abortSignal: AbortSignal.timeout(20_000),
+  });
+
+  return sanitizeConceptSvg(result.text);
+}
+
+interface GeminiGenerateContentResponse {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{
+        inlineData?: { mimeType?: string; data?: string };
+        inline_data?: { mime_type?: string; data?: string };
+        text?: string;
+      }>;
+    };
+  }>;
+}
+
+async function tryOpenAiImageGeneration(
+  apiKey: string,
+  model: string,
+  prompt: string
+): Promise<string | null> {
+  const response = await fetch('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      prompt,
+      size: '1536x1024',
+      n: 1,
+    }),
+    signal: AbortSignal.timeout(25_000),
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const data = (await response.json()) as {
+    data?: Array<{ b64_json?: string; url?: string }>;
+  };
+  const first = data.data?.[0];
+  if (first?.b64_json) {
+    return `data:image/png;base64,${first.b64_json}`;
+  }
+  if (first?.url) {
+    return first.url;
+  }
+  return null;
+}
+
+/**
+ * Generates a metaphor/concept visual using a 3-tier resolution pipeline:
+ * - Tier 1: Native multimodal image output from the session's active model (e.g. Gemini `:generateContent`
+ *           with `responseModalities: ["IMAGE", "TEXT"]`, or OpenAI image-capable models).
+ * - Tier 2: Dedicated Gemini Imagen / OpenAI Images endpoint if configured, otherwise active-LLM
+ *           bespoke `<svg viewBox="0 0 880 420">` generation via `resolveLanguageModel(provider)` (sanitized).
+ * - Tier 3: Deterministic offline fallback via `buildFallbackConceptSvg`.
+ */
+export async function generateConceptVisual(
+  input: ConceptVisualInput,
+  providerSelection?: ProviderSelection
+): Promise<VisualArtifact> {
   const id = `vis_${crypto.randomUUID().slice(0, 8)}`;
   const layout = inferConceptLayout(input);
   const accent = inferConceptAccent(input);
   const elements = normalizeElements(input.elements);
   const visualConfig = getEffectiveVisualSettings();
-  const { imageGenEnabled, geminiApiKey: geminiKey, openaiApiKey: openaiKey } = visualConfig;
+  const {
+    imageGenEnabled,
+    useActiveModelForVisuals,
+    geminiApiKey: geminiKey,
+    openaiApiKey: openaiKey,
+  } = visualConfig;
+
+  const activeSelection = providerSelection ?? getEffectiveDefaultProviderSelection();
+  const isDemoMode = activeSelection.provider === 'demo';
+
+  if (!imageGenEnabled || isDemoMode) {
+    const fallbackReason = !imageGenEnabled
+      ? 'Image generation disabled; rendered editorial vector concept map.'
+      : 'Demo mode active; rendered deterministic editorial vector concept map.';
+
+    return {
+      id,
+      kind: 'concept-image',
+      title: input.title,
+      caption: input.caption ?? input.metaphor,
+      metaphor: input.metaphor,
+      layout,
+      accent,
+      elements,
+      svgMarkup: buildFallbackConceptSvg({ ...input, layout, accent, elements }),
+      isFallback: true,
+      fallbackReason,
+    };
+  }
 
   const visualPrompt = buildEditorialImagePrompt({ ...input, elements }, layout);
+  let attemptedOpenAiImageModel: string | null = null;
 
-  if (imageGenEnabled && geminiKey) {
+  // Tier 1 — Native Multimodal Image Output from Configured Active Model
+  if (useActiveModelForVisuals && supportsNativeImageOutput(activeSelection)) {
+    if (activeSelection.provider === 'google' && geminiKey) {
+      try {
+        const activeModel = activeSelection.model?.trim() || getEffectiveModel('google');
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(geminiKey)}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: visualPrompt }] }],
+            generationConfig: {
+              responseModalities: ['IMAGE', 'TEXT'],
+            },
+          }),
+          signal: AbortSignal.timeout(20_000),
+        });
+
+        if (response.ok) {
+          const data = (await response.json()) as GeminiGenerateContentResponse;
+          const parts = data.candidates?.flatMap((c) => c.content?.parts ?? []) ?? [];
+          for (const part of parts) {
+            const base64Data = part.inlineData?.data || part.inline_data?.data;
+            if (base64Data) {
+              const mime =
+                part.inlineData?.mimeType || part.inline_data?.mime_type || 'image/png';
+              return {
+                id,
+                kind: 'concept-image',
+                title: input.title,
+                caption: input.caption ?? input.metaphor,
+                metaphor: input.metaphor,
+                layout,
+                accent,
+                elements,
+                imageDataUrl: `data:${mime};base64,${base64Data}`,
+                isFallback: false,
+              };
+            }
+          }
+        }
+      } catch {
+        // Fall through to Tier 2
+      }
+    } else if (activeSelection.provider === 'openai' && openaiKey) {
+      try {
+        const activeModel = activeSelection.model?.trim() || getEffectiveModel('openai');
+        attemptedOpenAiImageModel = activeModel;
+        const imageDataUrl = await tryOpenAiImageGeneration(openaiKey, activeModel, visualPrompt);
+        if (imageDataUrl) {
+          return {
+            id,
+            kind: 'concept-image',
+            title: input.title,
+            caption: input.caption ?? input.metaphor,
+            metaphor: input.metaphor,
+            layout,
+            accent,
+            elements,
+            imageDataUrl,
+            isFallback: false,
+          };
+        }
+      } catch {
+        // Fall through to Tier 2
+      }
+    }
+  }
+
+  // Tier 2a — Dedicated Image Model (Gemini Imagen / OpenAI Images) when configured
+  if (geminiKey) {
     try {
       const model = visualConfig.geminiImageModel;
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:predict?key=${encodeURIComponent(geminiKey)}`;
@@ -169,70 +472,65 @@ export async function generateConceptVisual(input: ConceptVisualInput): Promise<
         }
       }
     } catch {
-      // Fall through to OpenAI or clean SVG fallback
+      // Fall through to OpenAI dedicated endpoint or active-LLM SVG generation
     }
   }
 
-  if (imageGenEnabled && openaiKey) {
+  if (openaiKey && visualConfig.openaiImageModel !== attemptedOpenAiImageModel) {
     try {
-      const model = visualConfig.openaiImageModel;
-      const response = await fetch('https://api.openai.com/v1/images/generations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${openaiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          prompt: visualPrompt,
-          size: '1536x1024',
-          n: 1,
-        }),
-        signal: AbortSignal.timeout(25_000),
-      });
-
-      if (response.ok) {
-        const data = (await response.json()) as {
-          data?: Array<{ b64_json?: string; url?: string }>;
+      const imageDataUrl = await tryOpenAiImageGeneration(
+        openaiKey,
+        visualConfig.openaiImageModel,
+        visualPrompt
+      );
+      if (imageDataUrl) {
+        return {
+          id,
+          kind: 'concept-image',
+          title: input.title,
+          caption: input.caption ?? input.metaphor,
+          metaphor: input.metaphor,
+          layout,
+          accent,
+          elements,
+          imageDataUrl,
+          isFallback: false,
         };
-        const first = data.data?.[0];
-        if (first?.b64_json) {
-          return {
-            id,
-            kind: 'concept-image',
-            title: input.title,
-            caption: input.caption ?? input.metaphor,
-            metaphor: input.metaphor,
-            layout,
-            accent,
-            elements,
-            imageDataUrl: `data:image/png;base64,${first.b64_json}`,
-            isFallback: false,
-          };
-        }
-        if (first?.url) {
-          return {
-            id,
-            kind: 'concept-image',
-            title: input.title,
-            caption: input.caption ?? input.metaphor,
-            metaphor: input.metaphor,
-            layout,
-            accent,
-            elements,
-            imageDataUrl: first.url,
-            isFallback: false,
-          };
-        }
       }
     } catch {
-      // Fall through to clean SVG fallback
+      // Fall through to active-LLM bespoke SVG generation
     }
   }
 
-  const fallbackReason = !imageGenEnabled
-    ? 'Image generation disabled; rendered editorial vector concept map.'
-    : 'Rendered editorial vector concept map (no raster image API configured or reachable).';
+  // Tier 2b — Active-LLM Bespoke SVG Generation via resolveLanguageModel(provider)
+  if (useActiveModelForVisuals && activeSelection.provider !== 'demo') {
+    try {
+      const bespokeSvg = await generateBespokeConceptSvgWithLlm(
+        { ...input, layout, accent, elements },
+        activeSelection
+      );
+      if (bespokeSvg) {
+        return {
+          id,
+          kind: 'concept-image',
+          title: input.title,
+          caption: input.caption ?? input.metaphor,
+          metaphor: input.metaphor,
+          layout,
+          accent,
+          elements,
+          svgMarkup: bespokeSvg,
+          isFallback: false,
+        };
+      }
+    } catch {
+      // Fall through to Tier 3 deterministic offline SVG
+    }
+  }
+
+  // Tier 3 — Deterministic Offline Fallback
+  const fallbackReason =
+    'Rendered editorial vector concept map (no raster image API or active model SVG available).';
 
   return {
     id,

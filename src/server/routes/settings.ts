@@ -104,6 +104,7 @@ const updateSettingsSchema = z.object({
   visuals: z
     .object({
       imageGenEnabled: z.boolean().optional(),
+      useActiveModelForVisuals: z.boolean().optional(),
       geminiImageModel: z.string().max(160).optional(),
       openaiImageModel: z.string().max(160).optional(),
     })
