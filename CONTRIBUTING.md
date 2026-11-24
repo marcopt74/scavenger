@@ -164,4 +164,10 @@ If you find a way to make Scavenger read outside the chosen repository, write to
 
 ---
 
+## License
+
+Scavenger is licensed under the [Apache License 2.0](LICENSE). By submitting a contribution, you agree that it is licensed under the same terms, as described in Section 5 of the license.
+
+---
+
 Thanks again for contributing!
