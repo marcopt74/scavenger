@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Read-only Repository Onboarding Agent with a minimalist Gemini-inspired chat interface",
+  "license": "Apache-2.0",
   "scripts": {
     "dev": "concurrently -n server,client -c cyan,magenta \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "tsx watch src/server/index.ts",
