@@ -6,6 +6,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { HealthInfo } from '../shared/types.js';
+import { warmAgyStatusCheck } from './agyAuth.js';
 import { DEFAULT_MODELS, getConfiguredProviders, getDefaultProviderSelection } from './config.js';
 import { chatRouter } from './routes/chat.js';
 import { fsRouter } from './routes/fs.js';
@@ -57,6 +58,7 @@ const isDirectExecution =
 if (isDirectExecution) {
   const port = Number(process.env.PORT || 3001);
   const app = createApp();
+  warmAgyStatusCheck();
   const selection = getDefaultProviderSelection();
   serve({ fetch: app.fetch, port }, () => {
     console.log(

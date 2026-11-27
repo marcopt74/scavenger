@@ -69,6 +69,7 @@ export const STAGE_TO_PILLAR: Record<OnboardingStage, CorePillarId> = {
 export type UserLevel = 'uncalibrated' | 'foundational' | 'intermediate' | 'advanced';
 
 export type ProviderId =
+  | 'agy'
   | 'copilot'
   | 'google'
   | 'openai'
@@ -484,6 +485,13 @@ export interface ProviderModelPreset {
 }
 
 export const PROVIDER_MODEL_PRESETS: Record<ProviderId, readonly ProviderModelPreset[]> = {
+  agy: [
+    { id: 'gemini-4-neon-high', label: 'Gemini 4 Neon (High)', note: 'Balanced depth & speed' },
+    { id: 'gemini-4-neon-medium', label: 'Gemini 4 Neon (Medium)', note: 'Fast balanced reasoning' },
+    { id: 'gemini-4-hydrogen-high', label: 'Gemini 4 Hydrogen (High)', note: 'Rapid everyday coding' },
+    { id: 'gemini-4-argon-high', label: 'Gemini 4 Argon (High)', note: 'Frontier engineering' },
+    { id: 'gemini-4-carbon-high', label: 'Gemini 4 Carbon (High)', note: 'Deep architecture' },
+  ],
   copilot: [
     { id: 'gpt-4.1', label: 'GPT-4.1', note: 'GitHub Copilot default' },
     { id: 'gpt-4o', label: 'GPT-4o', note: 'Fast & versatile' },
@@ -526,6 +534,20 @@ export interface ProviderPublicConfig {
   keySource: SecretSource;
   sourceDetail?: string;
   ready: boolean;
+}
+
+export interface AgyModelsResponse {
+  models: ProviderModelPreset[];
+  source: 'live' | 'presets';
+  installed: boolean;
+  authenticated: boolean;
+  error?: string;
+}
+
+export interface AgyLoginResponse {
+  status: 'started' | 'already-authenticated' | 'not-installed' | 'error';
+  message: string;
+  verificationUrl?: string;
 }
 
 export interface CopilotModelsResponse {

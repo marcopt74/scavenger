@@ -19,6 +19,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { PROVIDER_MODEL_PRESETS } from '../../shared/types';
 import type {
+  AgyLoginResponse,
   CopilotDeviceFlowStartResponse,
   HealthInfo,
   ProviderId,
@@ -29,10 +30,12 @@ import type {
   UpdateSettingsPayload,
 } from '../../shared/types';
 import {
+  fetchAgyModels,
   fetchCopilotModels,
   fetchSettings,
   pollCopilotDeviceFlow,
   saveSettings,
+  startAgyLogin,
   startCopilotDeviceFlow,
   testProviderConnection,
 } from '../api/client';
@@ -48,6 +51,7 @@ type SettingsTab = 'models' | 'keys' | 'visuals';
 type RealProviderId = Exclude<ProviderId, 'demo'>;
 
 const REAL_PROVIDERS: readonly RealProviderId[] = [
+  'agy',
   'copilot',
   'google',
   'openai',
@@ -56,6 +60,7 @@ const REAL_PROVIDERS: readonly RealProviderId[] = [
 ];
 
 const ALL_PROVIDERS: readonly ProviderId[] = [
+  'agy',
   'copilot',
   'google',
   'openai',
@@ -68,6 +73,12 @@ const PROVIDER_META: Record<
   ProviderId,
   { name: string; subtitle: string; keyPlaceholder: string; keyHint: string }
 > = {
+  agy: {
+    name: 'Antigravity (agy)',
+    subtitle: 'Gemini 4 Neon · Hydrogen · Argon · Carbon',
+    keyPlaceholder: 'Managed locally via agy CLI login',
+    keyHint: 'Uses your local Antigravity CLI (agy) login — Scavenger never reads or stores your credentials',
+  },
   copilot: {
     name: 'GitHub Copilot',
     subtitle: 'GPT-4.1 · Claude Sonnet 4 · Gemini 2.5 Pro',
@@ -122,6 +133,7 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
   // Editable form state
   const [activeProvider, setActiveProvider] = useState<ProviderId>(provider.provider);
   const [models, setModels] = useState<Record<RealProviderId, string>>({
+    agy: PROVIDER_MODEL_PRESETS.agy[0].id,
     copilot: PROVIDER_MODEL_PRESETS.copilot[0].id,
     google: PROVIDER_MODEL_PRESETS.google[0].id,
     openai: PROVIDER_MODEL_PRESETS.openai[0].id,
@@ -135,6 +147,7 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
     provider.provider === 'copilot' ? provider.baseUrl || '' : ''
   );
   const [apiKeyDrafts, setApiKeyDrafts] = useState<Record<RealProviderId, string>>({
+    agy: '',
     copilot: '',
     google: '',
     openai: '',
@@ -142,6 +155,7 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
     'openai-compatible': '',
   });
   const [clearKeys, setClearKeys] = useState<Record<RealProviderId, boolean>>({
+    agy: false,
     copilot: false,
     google: false,
     openai: false,
@@ -149,12 +163,27 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
     'openai-compatible': false,
   });
   const [revealedKeys, setRevealedKeys] = useState<Record<RealProviderId, boolean>>({
+    agy: false,
     copilot: false,
     google: false,
     openai: false,
     anthropic: false,
     'openai-compatible': false,
   });
+
+  // Dynamic Antigravity (agy) models & login state
+  const [agyModels, setAgyModels] = useState<readonly ProviderModelPreset[]>(
+    PROVIDER_MODEL_PRESETS.agy
+  );
+  const [agyModelsSource, setAgyModelsSource] = useState<'live' | 'presets'>('presets');
+  const [loadingAgyModels, setLoadingAgyModels] = useState(false);
+  const [agyAuthState, setAgyAuthState] = useState<{
+    installed: boolean;
+    authenticated: boolean;
+    error?: string;
+  } | null>(null);
+  const [agyLoggingIn, setAgyLoggingIn] = useState(false);
+  const [agyLoginResult, setAgyLoginResult] = useState<AgyLoginResponse | null>(null);
 
   // Dynamic GitHub Copilot models & Device Flow state
   const [copilotModels, setCopilotModels] = useState<readonly ProviderModelPreset[]>(
@@ -178,6 +207,46 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
 
   // Prevent closing modal when a text-selection drag starts inside the panel and ends on the backdrop
   const backdropMouseDownRef = useRef(false);
+
+  async function loadAgyModelCatalog(refresh = false) {
+    setLoadingAgyModels(true);
+    try {
+      const res = await fetchAgyModels(refresh);
+      if (res.models.length > 0) {
+        setAgyModels(res.models);
+        setAgyModelsSource(res.source);
+      }
+      setAgyAuthState({
+        installed: res.installed,
+        authenticated: res.authenticated,
+        error: res.error,
+      });
+      if (res.authenticated) {
+        setAgyLoginResult(null);
+      }
+    } catch {
+      // Keep existing presets on transient error
+    } finally {
+      setLoadingAgyModels(false);
+    }
+  }
+
+  async function handleStartAgyLogin() {
+    setAgyLoggingIn(true);
+    setError(null);
+    setTestResult(null);
+    try {
+      const res = await startAgyLogin();
+      setAgyLoginResult(res);
+      if (res.status === 'already-authenticated') {
+        void loadAgyModelCatalog(true);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not start agy sign-in.');
+    } finally {
+      setAgyLoggingIn(false);
+    }
+  }
 
   async function loadCopilotModelCatalog(refresh = false, domainOverride?: string) {
     setLoadingCopilotModels(true);
@@ -204,6 +273,10 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
         setSettings(loaded);
         setActiveProvider(provider.provider || loaded.activeProvider);
         setModels({
+          agy:
+            provider.provider === 'agy' && provider.model
+              ? provider.model
+              : loaded.providers.agy.model,
           copilot:
             provider.provider === 'copilot' && provider.model
               ? provider.model
@@ -243,6 +316,9 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
 
         if (loaded.providers.copilot.ready) {
           void loadCopilotModelCatalog(false, initialCopilotDomain);
+        }
+        if (loaded.providers.agy.ready || (provider.provider || loaded.activeProvider) === 'agy') {
+          void loadAgyModelCatalog(false);
         }
       })
       .catch((err) => {
@@ -362,6 +438,12 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
 
   function isProviderEffectivelyReady(id: ProviderId): boolean {
     if (id === 'demo') return true;
+    if (id === 'agy') {
+      if (agyAuthState !== null) {
+        return agyAuthState.authenticated;
+      }
+      return Boolean(settings?.providers.agy.ready ?? health?.configuredProviders.agy);
+    }
     if (id === 'openai-compatible') {
       return Boolean(compatBaseUrl.trim());
     }
@@ -414,6 +496,9 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
     const payload: UpdateSettingsPayload = {
       activeProvider,
       providers: {
+        agy: {
+          model: models.agy.trim(),
+        },
         copilot: {
           model: models.copilot.trim(),
           baseUrl: copilotDomain.trim(),
@@ -471,6 +556,26 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
   }
 
   function renderKeyBadge(id: RealProviderId) {
+    if (id === 'agy') {
+      if (agyAuthState) {
+        if (agyAuthState.authenticated) {
+          return <span className="secret-status-pill source-local">Auto-detected (agy CLI login)</span>;
+        }
+        if (!agyAuthState.installed) {
+          return <span className="secret-status-pill source-none">CLI not found</span>;
+        }
+        return <span className="secret-status-pill source-none">Not signed in</span>;
+      }
+      const agyCfg = settings?.providers.agy;
+      if (agyCfg?.ready) {
+        return (
+          <span className="secret-status-pill source-local">
+            Auto-detected ({agyCfg.sourceDetail || 'agy CLI login'})
+          </span>
+        );
+      }
+      return <span className="secret-status-pill source-none">Not signed in</span>;
+    }
     const cfg = settings?.providers[id];
     const hasDraft = apiKeyDrafts[id].trim().length > 0;
     if (hasDraft) {
@@ -550,11 +655,13 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
     activeProvider === 'demo' ? null : activeProvider;
 
   const activeProviderPresets: readonly ProviderModelPreset[] =
-    activeRealProvider === 'copilot'
-      ? copilotModels
-      : activeRealProvider
-        ? PROVIDER_MODEL_PRESETS[activeRealProvider]
-        : [];
+    activeRealProvider === 'agy'
+      ? agyModels
+      : activeRealProvider === 'copilot'
+        ? copilotModels
+        : activeRealProvider
+          ? PROVIDER_MODEL_PRESETS[activeRealProvider]
+          : [];
 
   const isRemoteCompatEndpoint =
     activeRealProvider === 'openai-compatible' &&
@@ -567,6 +674,7 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
 
   const showQuickKeyCallout =
     activeRealProvider !== null &&
+    activeRealProvider !== 'agy' &&
     ((activeRealProvider !== 'openai-compatible' &&
       !isProviderEffectivelyReady(activeRealProvider)) ||
       (isRemoteCompatEndpoint && !compatHasKey));
@@ -659,6 +767,9 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
                           onClick={() => {
                             setActiveProvider(id);
                             setTestResult(null);
+                            if (id === 'agy' && agyAuthState === null && !loadingAgyModels) {
+                              void loadAgyModelCatalog(false);
+                            }
                           }}
                         >
                           <div className="provider-card-top">
@@ -676,6 +787,86 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
 
                 {activeRealProvider && (
                   <>
+                    {activeRealProvider === 'agy' && (
+                      <>
+                        <div className="copilot-auth-bar">
+                          <div className="copilot-auth-status">
+                            <span className="field-label" style={{ marginBottom: 0 }}>
+                              Antigravity CLI Login
+                            </span>
+                            {renderKeyBadge('agy')}
+                          </div>
+                          <div className="copilot-auth-actions">
+                            <button
+                              type="button"
+                              className="chip-button"
+                              disabled={agyLoggingIn}
+                              onClick={() => void handleStartAgyLogin()}
+                            >
+                              {agyLoggingIn ? (
+                                <Loader2 size={13} className="explorer-spinner" />
+                              ) : (
+                                <KeyRound size={13} />
+                              )}
+                              <span>
+                                {isProviderEffectivelyReady('agy')
+                                  ? 'Re-sign in with agy'
+                                  : 'Sign in with agy'}
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              className="chip-button"
+                              disabled={loadingAgyModels}
+                              onClick={() => void loadAgyModelCatalog(true)}
+                            >
+                              <RefreshCw
+                                size={13}
+                                className={loadingAgyModels ? 'explorer-spinner' : ''}
+                              />
+                              <span>{loadingAgyModels ? 'Checking…' : 'Check login'}</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {agyLoginResult && (
+                          <div
+                            className={`test-result-banner ${agyLoginResult.status === 'error' || agyLoginResult.status === 'not-installed' ? 'is-err' : 'is-ok'}`}
+                            role="status"
+                          >
+                            {agyLoginResult.status === 'error' || agyLoginResult.status === 'not-installed' ? (
+                              <AlertCircle size={15} />
+                            ) : (
+                              <CheckCircle2 size={15} />
+                            )}
+                            <span>
+                              {agyLoginResult.message}
+                              {agyLoginResult.verificationUrl && (
+                                <>
+                                  {' '}
+                                  <a
+                                    href={agyLoginResult.verificationUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{ textDecoration: 'underline' }}
+                                  >
+                                    Open Google Sign-In
+                                  </a>
+                                </>
+                              )}
+                            </span>
+                          </div>
+                        )}
+
+                        {!agyLoginResult && agyAuthState && !agyAuthState.authenticated && agyAuthState.error && (
+                          <div className="test-result-banner is-err" role="status">
+                            <AlertCircle size={15} />
+                            <span>{agyAuthState.error}</span>
+                          </div>
+                        )}
+                      </>
+                    )}
+
                     {activeRealProvider === 'copilot' && (
                       <>
                         <div className="field-group">
@@ -756,6 +947,13 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
                       <div className="field-label-row">
                         <label className="field-label" htmlFor="active-model-input">
                           Model for {PROVIDER_META[activeRealProvider].name}
+                          {activeRealProvider === 'agy' && (
+                            <span className="model-source-note">
+                              {agyModelsSource === 'live'
+                                ? ` · ${agyModels.length} live from your agy login`
+                                : ' · presets'}
+                            </span>
+                          )}
                           {activeRealProvider === 'copilot' && (
                             <span className="model-source-note">
                               {copilotModelsSource === 'live'
@@ -764,6 +962,22 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
                             </span>
                           )}
                         </label>
+                        {activeRealProvider === 'agy' && (
+                          <button
+                            type="button"
+                            className="settings-link-btn"
+                            disabled={loadingAgyModels}
+                            onClick={() => void loadAgyModelCatalog(true)}
+                            title="Fetch Gemini 4 and other models available on your local agy login"
+                          >
+                            <RefreshCw
+                              size={12}
+                              className={loadingAgyModels ? 'explorer-spinner' : ''}
+                              style={{ marginRight: 4, verticalAlign: '-1px' }}
+                            />
+                            <span>{loadingAgyModels ? 'Refreshing…' : 'Refresh models'}</span>
+                          </button>
+                        )}
                         {activeRealProvider === 'copilot' && isProviderEffectivelyReady('copilot') && (
                           <button
                             type="button"
@@ -996,121 +1210,153 @@ export function SettingsModal({ health, provider, onSaved, onClose }: SettingsMo
                           )}
                         </div>
 
-                        {id === 'copilot' && (
+                        {id === 'agy' ? (
                           <div className="copilot-keys-actions">
-                            <div className="field-group" style={{ width: '100%', marginBottom: 4 }}>
-                              <label className="field-label" htmlFor="keys-copilot-domain-input">
-                                GitHub Domain (optional — for organizational / Enterprise GitHub)
-                              </label>
-                              <input
-                                id="keys-copilot-domain-input"
-                                className="field-input field-mono"
-                                value={copilotDomain}
-                                onChange={(e) => {
-                                  setCopilotDomain(e.target.value);
-                                  setDeviceFlow(null);
-                                }}
-                                placeholder="github.com (or e.g. company.ghe.com / github.company.com)"
-                              />
-                            </div>
                             <button
                               type="button"
                               className="chip-button"
-                              disabled={deviceStarting || Boolean(deviceFlow)}
-                              onClick={() => void handleStartDeviceFlow()}
+                              disabled={agyLoggingIn}
+                              onClick={() => void handleStartAgyLogin()}
                             >
-                              {deviceStarting ? (
+                              {agyLoggingIn ? (
                                 <Loader2 size={13} className="explorer-spinner" />
                               ) : (
                                 <KeyRound size={13} />
                               )}
-                              <span>
-                                Sign in with GitHub Device Flow ({copilotDomain.trim() || 'github.com'})
-                              </span>
+                              <span>Sign in via agy CLI (`agy acp --login`)</span>
                             </button>
-                            {renderCopilotDeviceFlowBox()}
+                            <button
+                              type="button"
+                              className="chip-button"
+                              disabled={loadingAgyModels}
+                              onClick={() => void loadAgyModelCatalog(true)}
+                            >
+                              <RefreshCw
+                                size={13}
+                                className={loadingAgyModels ? 'explorer-spinner' : ''}
+                              />
+                              <span>{loadingAgyModels ? 'Checking…' : 'Refresh status'}</span>
+                            </button>
                           </div>
-                        )}
-
-                        {id === 'openai-compatible' && (
-                          <div className="field-group" style={{ marginBottom: 8 }}>
-                            <label className="field-label" htmlFor="keys-baseurl-input">
-                              Base URL
-                            </label>
-                            <div className="endpoint-presets-row">
-                              {COMPAT_ENDPOINT_PRESETS.map((preset) => (
+                        ) : (
+                          <>
+                            {id === 'copilot' && (
+                              <div className="copilot-keys-actions">
+                                <div className="field-group" style={{ width: '100%', marginBottom: 4 }}>
+                                  <label className="field-label" htmlFor="keys-copilot-domain-input">
+                                    GitHub Domain (optional — for organizational / Enterprise GitHub)
+                                  </label>
+                                  <input
+                                    id="keys-copilot-domain-input"
+                                    className="field-input field-mono"
+                                    value={copilotDomain}
+                                    onChange={(e) => {
+                                      setCopilotDomain(e.target.value);
+                                      setDeviceFlow(null);
+                                    }}
+                                    placeholder="github.com (or e.g. company.ghe.com / github.company.com)"
+                                  />
+                                </div>
                                 <button
-                                  key={preset.label}
                                   type="button"
-                                  className={`endpoint-preset-chip ${compatBaseUrl.trim() === preset.url ? 'active' : ''}`}
-                                  onClick={() => setCompatBaseUrl(preset.url)}
+                                  className="chip-button"
+                                  disabled={deviceStarting || Boolean(deviceFlow)}
+                                  onClick={() => void handleStartDeviceFlow()}
                                 >
-                                  {preset.label}
+                                  {deviceStarting ? (
+                                    <Loader2 size={13} className="explorer-spinner" />
+                                  ) : (
+                                    <KeyRound size={13} />
+                                  )}
+                                  <span>
+                                    Sign in with GitHub Device Flow ({copilotDomain.trim() || 'github.com'})
+                                  </span>
                                 </button>
-                              ))}
+                                {renderCopilotDeviceFlowBox()}
+                              </div>
+                            )}
+
+                            {id === 'openai-compatible' && (
+                              <div className="field-group" style={{ marginBottom: 8 }}>
+                                <label className="field-label" htmlFor="keys-baseurl-input">
+                                  Base URL
+                                </label>
+                                <div className="endpoint-presets-row">
+                                  {COMPAT_ENDPOINT_PRESETS.map((preset) => (
+                                    <button
+                                      key={preset.label}
+                                      type="button"
+                                      className={`endpoint-preset-chip ${compatBaseUrl.trim() === preset.url ? 'active' : ''}`}
+                                      onClick={() => setCompatBaseUrl(preset.url)}
+                                    >
+                                      {preset.label}
+                                    </button>
+                                  ))}
+                                </div>
+                                <input
+                                  id="keys-baseurl-input"
+                                  className="field-input field-mono"
+                                  value={compatBaseUrl}
+                                  onChange={(e) => setCompatBaseUrl(e.target.value)}
+                                  placeholder="http://localhost:11434/v1"
+                                />
+                              </div>
+                            )}
+
+                            <div className="secret-input-row">
+                              <div className="secret-input-wrap">
+                                <input
+                                  type={revealedKeys[id] ? 'text' : 'password'}
+                                  className="field-input field-mono secret-input"
+                                  value={apiKeyDrafts[id]}
+                                  disabled={isClearing}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setApiKeyDrafts((prev) => ({ ...prev, [id]: val }));
+                                    if (val.trim()) {
+                                      setClearKeys((prev) => ({ ...prev, [id]: false }));
+                                    }
+                                  }}
+                                  placeholder={
+                                    cfg?.hasKey
+                                      ? 'Leave blank to keep existing key, or paste a new key'
+                                      : PROVIDER_META[id].keyPlaceholder
+                                  }
+                                  aria-label={`${PROVIDER_META[id].name} API Key`}
+                                  autoComplete="off"
+                                  spellCheck={false}
+                                />
+                                <button
+                                  type="button"
+                                  className="secret-eye-btn"
+                                  onClick={() =>
+                                    setRevealedKeys((prev) => ({ ...prev, [id]: !prev[id] }))
+                                  }
+                                  aria-label={`Toggle ${PROVIDER_META[id].name} key visibility`}
+                                >
+                                  {revealedKeys[id] ? <EyeOff size={15} /> : <Eye size={15} />}
+                                </button>
+                              </div>
+
+                              {canRemove && (
+                                <button
+                                  type="button"
+                                  className={`secret-clear-btn ${isClearing ? 'is-undo' : ''}`}
+                                  onClick={() => {
+                                    setClearKeys((prev) => ({ ...prev, [id]: !prev[id] }));
+                                    if (!isClearing) {
+                                      setApiKeyDrafts((prev) => ({ ...prev, [id]: '' }));
+                                    }
+                                  }}
+                                  title={isClearing ? 'Undo key removal' : 'Remove saved key'}
+                                >
+                                  {isClearing ? <Undo2 size={14} /> : <Trash2 size={14} />}
+                                  <span>{isClearing ? 'Undo' : 'Remove'}</span>
+                                </button>
+                              )}
                             </div>
-                            <input
-                              id="keys-baseurl-input"
-                              className="field-input field-mono"
-                              value={compatBaseUrl}
-                              onChange={(e) => setCompatBaseUrl(e.target.value)}
-                              placeholder="http://localhost:11434/v1"
-                            />
-                          </div>
+                          </>
                         )}
-
-                        <div className="secret-input-row">
-                          <div className="secret-input-wrap">
-                            <input
-                              type={revealedKeys[id] ? 'text' : 'password'}
-                              className="field-input field-mono secret-input"
-                              value={apiKeyDrafts[id]}
-                              disabled={isClearing}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setApiKeyDrafts((prev) => ({ ...prev, [id]: val }));
-                                if (val.trim()) {
-                                  setClearKeys((prev) => ({ ...prev, [id]: false }));
-                                }
-                              }}
-                              placeholder={
-                                cfg?.hasKey
-                                  ? 'Leave blank to keep existing key, or paste a new key'
-                                  : PROVIDER_META[id].keyPlaceholder
-                              }
-                              aria-label={`${PROVIDER_META[id].name} API Key`}
-                              autoComplete="off"
-                              spellCheck={false}
-                            />
-                            <button
-                              type="button"
-                              className="secret-eye-btn"
-                              onClick={() =>
-                                setRevealedKeys((prev) => ({ ...prev, [id]: !prev[id] }))
-                              }
-                              aria-label={`Toggle ${PROVIDER_META[id].name} key visibility`}
-                            >
-                              {revealedKeys[id] ? <EyeOff size={15} /> : <Eye size={15} />}
-                            </button>
-                          </div>
-
-                          {canRemove && (
-                            <button
-                              type="button"
-                              className={`secret-clear-btn ${isClearing ? 'is-undo' : ''}`}
-                              onClick={() => {
-                                setClearKeys((prev) => ({ ...prev, [id]: !prev[id] }));
-                                if (!isClearing) {
-                                  setApiKeyDrafts((prev) => ({ ...prev, [id]: '' }));
-                                }
-                              }}
-                              title={isClearing ? 'Undo key removal' : 'Remove saved key'}
-                            >
-                              {isClearing ? <Undo2 size={14} /> : <Trash2 size={14} />}
-                              <span>{isClearing ? 'Undo' : 'Remove'}</span>
-                            </button>
-                          )}
-                        </div>
 
                         <span className="field-hint">{PROVIDER_META[id].keyHint}</span>
                       </div>

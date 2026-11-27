@@ -90,7 +90,7 @@ export async function runOnboardingTurn(
   let fullText = '';
 
   try {
-    const model = resolveLanguageModel(activeProvider);
+    const model = resolveLanguageModel(activeProvider, { sessionKey: session.id });
 
     if (!model) {
       fullText = await runDemoTurn(session, userText, {

@@ -9,7 +9,7 @@ const chatBodySchema = z.object({
   message: z.string().min(1, 'Message cannot be empty.').max(8000),
   provider: z
     .object({
-      provider: z.enum(['copilot', 'google', 'openai', 'anthropic', 'openai-compatible', 'demo']),
+      provider: z.enum(['agy', 'copilot', 'google', 'openai', 'anthropic', 'openai-compatible', 'demo']),
       model: z.string().optional(),
       baseUrl: z.string().optional(),
     })
