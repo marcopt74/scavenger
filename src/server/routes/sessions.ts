@@ -15,6 +15,7 @@ import type {
   TopicMastery,
   UserLevel,
 } from '../../shared/types.js';
+import { disposeAgySessionWorker } from '../agyLanguageModel.js';
 import {
   GuardrailViolationError,
   resolveSafeRepoPath,
@@ -39,7 +40,7 @@ import { gitInspect } from '../tools/gitTools.js';
 
 const providerSchema = z
   .object({
-    provider: z.enum(['copilot', 'google', 'openai', 'anthropic', 'openai-compatible', 'demo']),
+    provider: z.enum(['agy', 'copilot', 'google', 'openai', 'anthropic', 'openai-compatible', 'demo']),
     model: z.string().optional(),
     baseUrl: z.string().optional(),
   })
@@ -208,6 +209,7 @@ sessionsRouter.delete('/:id', (c) => {
   if (!deleted) {
     return c.json({ error: 'Session not found.' }, 404);
   }
+  disposeAgySessionWorker(id);
   return c.json({
     ok: true,
     sessions: listSessionSummaries(),

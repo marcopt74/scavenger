@@ -1,4 +1,6 @@
 import type {
+  AgyLoginResponse,
+  AgyModelsResponse,
   CodePeekFileResponse,
   CodePeekGitResponse,
   CopilotDeviceFlowPollResponse,
@@ -77,6 +79,37 @@ export async function testProviderConnection(
     model: data.model ?? payload.model ?? '',
     latencyMs: data.latencyMs ?? 0,
     message: data.message ?? (data.ok ? 'Connected.' : 'Connection failed.'),
+  };
+}
+
+export async function fetchAgyModels(refresh = false): Promise<AgyModelsResponse> {
+  const query = refresh ? '?refresh=true' : '';
+  const res = await fetch(`/api/settings/agy/models${query}`);
+  const data = (await res.json()) as Partial<AgyModelsResponse> & { error?: string };
+  if (!res.ok || !Array.isArray(data.models)) {
+    throw new Error(data.error || `Failed to load agy models (${res.status})`);
+  }
+  return {
+    models: data.models,
+    source: data.source === 'live' ? 'live' : 'presets',
+    installed: Boolean(data.installed),
+    authenticated: Boolean(data.authenticated),
+    error: data.error,
+  };
+}
+
+export async function startAgyLogin(): Promise<AgyLoginResponse> {
+  const res = await fetch('/api/settings/agy/login', {
+    method: 'POST',
+  });
+  const data = (await res.json()) as Partial<AgyLoginResponse> & { error?: string };
+  if (!res.ok || !data.status) {
+    throw new Error(data.error || `Failed to start agy sign-in (${res.status})`);
+  }
+  return {
+    status: data.status,
+    message: data.message ?? 'Antigravity sign-in initiated.',
+    verificationUrl: data.verificationUrl,
   };
 }
 

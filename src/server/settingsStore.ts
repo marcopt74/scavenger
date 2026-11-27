@@ -10,9 +10,12 @@ import type {
   SecretSource,
   UpdateSettingsPayload,
 } from '../shared/types.js';
+import { getAgyReadinessSync, resetAgyCaches } from './agyAuth.js';
+import { disposeAllAgyWorkers } from './agyLanguageModel.js';
 import { discoverLocalCopilotToken, resetCopilotCaches } from './copilotAuth.js';
 
 export const DEFAULT_MODELS: Record<ProviderId, string> = {
+  agy: 'gemini-4-neon-high',
   copilot: 'gpt-4.1',
   google: 'gemini-2.5-flash',
   openai: 'gpt-4o',
@@ -42,6 +45,7 @@ interface StoredSettingsFile {
 }
 
 const VALID_PROVIDERS: readonly ProviderId[] = [
+  'agy',
   'copilot',
   'google',
   'openai',
@@ -65,6 +69,8 @@ export function resetSettingsCache(): void {
   cachedPath = null;
   cachedData = null;
   resetCopilotCaches();
+  resetAgyCaches();
+  disposeAllAgyWorkers();
 }
 
 function readStoredSettings(): StoredSettingsFile {
@@ -132,6 +138,8 @@ export function maskApiKey(key: string): string {
 
 function getEnvApiKey(provider: Exclude<ProviderId, 'demo'>): string | undefined {
   switch (provider) {
+    case 'agy':
+      return undefined;
     case 'copilot':
       return (
         process.env.GITHUB_COPILOT_TOKEN ||
@@ -178,6 +186,14 @@ export function getEffectiveApiKey(provider: ProviderId): {
 } {
   if (provider === 'demo') {
     return { value: undefined, source: 'none' };
+  }
+  if (provider === 'agy') {
+    const agyStatus = getAgyReadinessSync();
+    return {
+      value: undefined,
+      source: agyStatus.ready ? 'local' : 'none',
+      sourceDetail: agyStatus.sourceDetail,
+    };
   }
   const stored = readStoredSettings();
   const storedKey = stored.providers?.[provider]?.apiKey?.trim();
@@ -237,6 +253,7 @@ export function getEffectiveModel(provider: ProviderId): string {
 
 export function getEffectiveConfiguredProviders(): Record<ProviderId, boolean> {
   return {
+    agy: getAgyReadinessSync().ready,
     copilot: Boolean(getEffectiveApiKey('copilot').value),
     google: Boolean(getEffectiveApiKey('google').value),
     openai: Boolean(getEffectiveApiKey('openai').value),
@@ -278,7 +295,7 @@ export function getEffectiveDefaultProviderSelection(): ProviderSelection {
     }
   }
 
-  for (const candidate of ['copilot', 'google', 'openai', 'anthropic', 'openai-compatible'] as const) {
+  for (const candidate of ['copilot', 'google', 'openai', 'anthropic', 'openai-compatible', 'agy'] as const) {
     if (configured[candidate]) {
       return {
         provider: candidate,
@@ -374,6 +391,7 @@ export function getPublicSettings(capabilities: { d2Available: boolean }): Publi
   return {
     activeProvider: selection.provider,
     providers: {
+      agy: buildProviderPublic('agy'),
       copilot: buildProviderPublic('copilot'),
       google: buildProviderPublic('google'),
       openai: buildProviderPublic('openai'),
@@ -406,7 +424,7 @@ export function updateStoredSettings(patch: UpdateSettingsPayload): StoredSettin
   }
 
   if (patch.providers) {
-    const providerIds = ['copilot', 'google', 'openai', 'anthropic', 'openai-compatible'] as const;
+    const providerIds = ['agy', 'copilot', 'google', 'openai', 'anthropic', 'openai-compatible'] as const;
     for (const id of providerIds) {
       const update = patch.providers[id];
       if (!update) continue;
@@ -425,7 +443,11 @@ export function updateStoredSettings(patch: UpdateSettingsPayload): StoredSettin
         else delete existing.baseUrl;
       }
 
-      if (update.clearApiKey) {
+      // Never store any credentials for agy; authentication stays managed by the local agy CLI
+      if (id === 'agy') {
+        delete existing.apiKey;
+        delete existing.baseUrl;
+      } else if (update.clearApiKey) {
         delete existing.apiKey;
       } else if (update.apiKey !== undefined && update.apiKey.trim().length > 0) {
         existing.apiKey = update.apiKey.trim();

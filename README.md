@@ -26,7 +26,7 @@ Scavenger is a local **Repository Onboarding Agent** with a clean, Gemini-inspir
   - **Live Composer Status Banner:** Displays real-time phased progress (*Inspecting repository*, *Synthesizing lesson*, *Streaming response*), an elapsed timer, and live read-only tool pills while awaiting a response.
   - **Light & Dark Theme Toggle:** Instant 1-click theme switching in the top bar and welcome screen, persisted across sessions with theme-aware diagrams and typography.
 - **Built-In Local File Explorer:** Click **Browse** on the welcome screen to pick any repository on disk visually with Git repository badges, clickable breadcrumbs, OS shortcuts (`Home`, `Workspace`, `Desktop`, `Documents`, `Root`), instant folder filtering, and keyboard navigation.
-- **In-App Settings Menu (No `.env` Required):** Configure API keys, switch between **GitHub Copilot** (auto-detects local Copilot IDE/CLI auth or signs in via in-app GitHub Device Flow, supports Enterprise domains, and discovers live models enabled on your subscription), **Google Gemini**, **OpenAI**, **Anthropic Claude**, **OpenAI-Compatible** (Ollama, LM Studio, OpenRouter), or zero-key **Demo Mode**, pick curated model presets or custom model IDs, and **Test Connection** live — persisted locally with `0600` permissions and zero restarts.
+- **In-App Settings Menu (No `.env` Required):** Configure API keys, switch between **Antigravity (`agy`)** (uses your local `agy` CLI login for Gemini 4 models like `gemini-4-neon-high`, `gemini-4-hydrogen-high`, `gemini-4-argon-high`, `gemini-4-carbon-high` with zero stored credentials), **GitHub Copilot** (auto-detects local Copilot IDE/CLI auth or signs in via in-app GitHub Device Flow, supports Enterprise domains, and discovers live models enabled on your subscription), **Google Gemini**, **OpenAI**, **Anthropic Claude**, **OpenAI-Compatible** (Ollama, LM Studio, OpenRouter), or zero-key **Demo Mode**, pick curated model presets or custom model IDs, and **Test Connection** live — persisted locally with `0600` permissions and zero restarts.
 - **Strict Backend-Enforced Read-Only Guardrails:** Every filesystem and git inspection tool is strictly confined and lock-free — Scavenger never modifies files, creates git locks, or mutates your repository.
 
 ---
@@ -76,6 +76,7 @@ No need to edit `.env` files or restart the server:
 
 1. Click the **Provider** chip on the welcome screen (or the **⚙ Settings** icon in the top bar at any time).
 2. Under **Models & Provider**, choose your provider:
+   - **Antigravity (`agy`)** — uses your local `agy` CLI login (sign in via `agy acp --login` or the in-app **Sign in with agy** button), dynamically discovers all Gemini 4 models enabled on your account (`gemini-4-neon-high`, `gemini-4-hydrogen-high`, `gemini-4-argon-high`, `gemini-4-carbon-high`, etc.), and runs in an isolated empty sandbox so Scavenger's read-only guardrails stay strictly enforced with zero credentials stored in Scavenger
    - **GitHub Copilot** — automatically detects existing local Copilot authentication (`~/.config/github-copilot/{hosts,apps}.json`, `~/.copilot/config.json`, or `gh auth token`), supports 1-click **Sign in with GitHub Copilot** Device Flow, and dynamically loads all chat models enabled on your Copilot subscription (`gpt-4.1`, `gpt-4o`, `claude-sonnet-4`, `gemini-2.5-pro`, `o3-mini`, etc.)
    - **Google Gemini** (`gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-2.0-flash`, or custom model ID)
    - **OpenAI** (`gpt-4o`, `gpt-4.1`, `gpt-4.1-mini`, `o3-mini`, or custom model ID)
@@ -99,8 +100,9 @@ cp .env.example .env
 | Variable | Description | Default |
 | --- | --- | --- |
 | `PORT` | Backend server port | `3001` |
-| `LLM_PROVIDER` | `copilot` \| `google` \| `openai` \| `anthropic` \| `openai-compatible` \| `demo` | Auto-detected or `demo` |
+| `LLM_PROVIDER` | `agy` \| `copilot` \| `google` \| `openai` \| `anthropic` \| `openai-compatible` \| `demo` | Auto-detected or `demo` |
 | `LLM_MODEL` | Optional default model override | Provider default |
+| `SCAVENGER_AGY_BIN` | Optional path override to the local `agy` CLI binary | Auto-detected on `PATH` / `~/.local/bin/agy` |
 | `GITHUB_COPILOT_TOKEN` | GitHub Copilot OAuth token (optional if auto-detected locally or signed in via UI) | Auto-detected |
 | `GITHUB_COPILOT_DOMAIN` | Optional organizational / Enterprise GitHub domain (e.g. `company.ghe.com` or `github.company.com`) | `github.com` |
 | `GOOGLE_GENERATIVE_AI_API_KEY` | Google Gemini API key (`GEMINI_API_KEY` also supported) | — |

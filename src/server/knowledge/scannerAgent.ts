@@ -279,7 +279,8 @@ async function enrichKnowledgeMapWithLlm(
 
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 18_000);
+    const timeoutMs = provider.provider === 'agy' ? 45_000 : 18_000;
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const result = await generateText({
         model,

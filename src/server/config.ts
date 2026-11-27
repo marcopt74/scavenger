@@ -4,6 +4,8 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import type { LanguageModel } from 'ai';
 import type { ProviderId, ProviderSelection } from '../shared/types.js';
+import { createAgyLanguageModel } from './agyLanguageModel.js';
+import { resolveAgyBinary } from './agyAuth.js';
 import { createCopilotFetch, DEFAULT_COPILOT_API_BASE } from './copilotAuth.js';
 import {
   DEFAULT_MODELS,
@@ -28,6 +30,7 @@ export function getDefaultProviderSelection(): ProviderSelection {
 export interface ModelInlineOverrides {
   apiKey?: string;
   baseUrl?: string;
+  sessionKey?: string;
 }
 
 export function resolveLanguageModel(
@@ -39,6 +42,19 @@ export function resolveLanguageModel(
   switch (selection.provider) {
     case 'demo':
       return null;
+
+    case 'agy': {
+      const agyBin = resolveAgyBinary();
+      if (!agyBin) {
+        throw new Error(
+          'Antigravity CLI (`agy`) was not found on PATH. Install `agy`, sign in with `agy acp --login`, or switch providers in Settings.'
+        );
+      }
+      return createAgyLanguageModel({
+        modelId,
+        sessionKey: overrides?.sessionKey,
+      });
+    }
 
     case 'copilot': {
       const apiKey = overrides?.apiKey?.trim() || getEffectiveApiKey('copilot').value;

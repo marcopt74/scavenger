@@ -7,6 +7,7 @@ import type {
   ProviderId,
   TestConnectionResult,
 } from '../../shared/types.js';
+import { fetchAgyModels, startAgyLogin } from '../agyAuth.js';
 import {
   DEFAULT_MODELS,
   getConfiguredProviders,
@@ -29,6 +30,7 @@ import {
 import { checkD2Available, isImageGenConfigured } from '../tools/visualTools.js';
 
 const providerIdEnum = z.enum([
+  'agy',
   'copilot',
   'google',
   'openai',
@@ -94,6 +96,7 @@ const updateSettingsSchema = z.object({
   activeProvider: providerIdEnum.optional(),
   providers: z
     .object({
+      agy: providerUpdateSchema.optional(),
       copilot: copilotProviderUpdateSchema.optional(),
       google: providerUpdateSchema.optional(),
       openai: providerUpdateSchema.optional(),
@@ -148,6 +151,17 @@ async function buildHealthSnapshot(): Promise<HealthInfo> {
 settingsRouter.get('/', async (c) => {
   const d2Available = await checkD2Available();
   return c.json({ settings: getPublicSettings({ d2Available }) });
+});
+
+settingsRouter.get('/agy/models', async (c) => {
+  const forceRefresh = c.req.query('refresh') === 'true';
+  const result = await fetchAgyModels({ forceRefresh });
+  return c.json(result);
+});
+
+settingsRouter.post('/agy/login', async (c) => {
+  const result = await startAgyLogin();
+  return c.json(result);
 });
 
 settingsRouter.get('/copilot/models', async (c) => {
@@ -323,11 +337,12 @@ settingsRouter.post('/test', async (c) => {
       return c.json(res);
     }
 
+    const timeoutMs = provider === 'agy' ? 45_000 : 12_000;
     await generateText({
       model: languageModel,
       prompt: 'Reply with OK.',
       maxOutputTokens: 8,
-      abortSignal: AbortSignal.timeout(12_000),
+      abortSignal: AbortSignal.timeout(timeoutMs),
     });
 
     const latencyMs = Date.now() - startedAt;
